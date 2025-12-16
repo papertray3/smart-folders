@@ -1,0 +1,252 @@
+import { App, Plugin, PluginSettingTab, WorkspaceLeaf, TFolder, Setting, normalizePath } from "obsidian";
+import { SmartFoldersManager } from "./manager";
+import { RuleBuilderView, VIEW_TYPE_RULE_BUILDER } from "./ui/rule-builder-view";
+import { DEFAULT_SETTINGS, SmartFoldersSettings } from "./types";
+
+export default class SmartFoldersPlugin extends Plugin {
+  settings: SmartFoldersSettings = DEFAULT_SETTINGS;
+  manager: SmartFoldersManager | null = null;
+
+  async onload(): Promise<void> {
+    await this.loadSettings();
+
+    this.manager = new SmartFoldersManager(this, () => this.settings);
+    await this.manager.start();
+
+    this.addRibbonIcon("folder", "Smart Folders (root)", () => this.openViewForFolder("/"));
+
+    this.addCommand({
+      id: "smart-folders-run-on-active-file",
+      name: "Process active file with Smart Folders rules",
+      callback: () => this.runOnActiveFile(),
+    });
+
+    this.addCommand({
+      id: "smart-folders-open-view",
+      name: "Configure Smart Folders for current folder",
+      callback: () => this.openViewForCurrentFolder(),
+    });
+
+    this.registerFolderContextMenu();
+
+    this.registerView(VIEW_TYPE_RULE_BUILDER, (leaf) => new RuleBuilderView(leaf, this));
+
+    this.addSettingTab(new MinimalSettingTab(this.app, this));
+
+    console.info("Smart Folders: plugin loaded", this.settings);
+  }
+
+  async onunload(): Promise<void> {
+    await this.manager?.stop();
+    console.info("Smart Folders: plugin unloaded");
+  }
+
+  private async loadSettings(): Promise<void> {
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...(await this.loadData()),
+    };
+  }
+
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+    await this.manager?.restart();
+  }
+
+  private async openViewForCurrentFolder() {
+    const folder = this.getCurrentFolder();
+    await this.openViewForFolder(folder);
+  }
+
+  async openViewForFolder(folder: string) {
+    const leaf = this.getRuleLeaf();
+    await leaf.setViewState({ type: VIEW_TYPE_RULE_BUILDER, state: { folder } });
+    this.app.workspace.revealLeaf(leaf);
+  }
+
+  private getCurrentFolder(): string {
+    // First, try to get folder from active file
+    const file = this.app.workspace.getActiveFile();
+    if (file) return file.parent?.path ?? "/";
+
+    // If no active file, check if there's already a Smart Folders view open and use its folder
+    const existingLeaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_RULE_BUILDER)[0];
+    if (existingLeaf) {
+      const view = existingLeaf.view as RuleBuilderView;
+      const state = view.getState();
+      if (state?.folder) return state.folder;
+    }
+
+    // Default to root
+    return "/";
+  }
+
+  private getRuleLeaf(): WorkspaceLeaf {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_RULE_BUILDER)[0];
+    if (existing) return existing;
+    // Open in main editor area (like a regular note tab)
+    return this.app.workspace.getLeaf(true);
+  }
+
+  private registerFolderContextMenu() {
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        if (file instanceof TFolder) {
+          menu.addItem((item) =>
+            item
+              .setTitle("Smart Folders: Configure")
+              .setIcon("folder")
+              .onClick(() => this.openViewForFolder(file.path))
+          );
+        }
+      })
+    );
+  }
+
+  private async runOnActiveFile() {
+    const file = this.app.workspace.getActiveFile();
+    if (!file) return;
+    await this.manager?.processFile(file, "manual-command");
+  }
+}
+
+class MinimalSettingTab extends PluginSettingTab {
+  constructor(app: App, private readonly pluginInstance: SmartFoldersPlugin) {
+    super(app, pluginInstance);
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Smart Folders" });
+
+    new Setting(containerEl)
+      .setName("Open rule builder")
+      .setDesc("Use the command palette: Open Smart Folders view for current folder")
+      .addButton((btn) => btn.setButtonText("Open root").onClick(() => this.pluginInstance.openViewForFolder("/")));
+
+    new Setting(containerEl)
+      .setName("Inherit content policy")
+      .setDesc("If enabled, children inherit parent content policy unless they set their own.")
+      .addToggle((t) =>
+        t
+          .setValue(this.pluginInstance.settings.inheritContentPolicy)
+          .onChange(async (v) => {
+            this.pluginInstance.settings.inheritContentPolicy = v;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Default quarantine path")
+      .setDesc("Used when folders do not specify their own.")
+      .addText((t) =>
+        t
+          .setPlaceholder("_sf/lost+found")
+          .setValue(this.pluginInstance.settings.defaultQuarantinePath)
+          .onChange(async (v) => {
+            this.pluginInstance.settings.defaultQuarantinePath = v.trim() || "_sf/lost+found";
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Auto-move on policy change")
+      .setDesc("When enabled, existing violations are rerouted automatically after changing a folder's content policy.")
+      .addToggle((t) =>
+        t
+          .setValue(this.pluginInstance.settings.autoMoveOnPolicyChange)
+          .onChange(async (v) => {
+            this.pluginInstance.settings.autoMoveOnPolicyChange = v;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    // Ignored folders section
+    containerEl.createEl("h3", { text: "Ignored Folders" });
+
+    const ignoredDesc = containerEl.createDiv({ cls: "setting-item-description" });
+    ignoredDesc.setText("Folders listed here (and their subfolders) will be completely ignored by Smart Folders.");
+    ignoredDesc.style.marginBottom = "10px";
+
+    this.pluginInstance.settings.ignoredFolders.forEach((folder, index) => {
+      new Setting(containerEl)
+        .setName(`Folder ${index + 1}`)
+        .addText((text) =>
+          text
+            .setPlaceholder("folder/path")
+            .setValue(folder)
+            .onChange(async (value) => {
+              this.pluginInstance.settings.ignoredFolders[index] = normalizePath(value);
+              await this.pluginInstance.saveSettings();
+            })
+        )
+        .addButton((btn) =>
+          btn
+            .setButtonText("Remove")
+            .setWarning()
+            .onClick(async () => {
+              this.pluginInstance.settings.ignoredFolders.splice(index, 1);
+              await this.pluginInstance.saveSettings();
+              this.display();
+            })
+        );
+    });
+
+    new Setting(containerEl)
+      .addButton((btn) =>
+        btn
+          .setButtonText("Add ignored folder")
+          .setCta()
+          .onClick(async () => {
+            this.pluginInstance.settings.ignoredFolders.push("");
+            await this.pluginInstance.saveSettings();
+            this.display();
+          })
+      );
+
+    // Audit logging section
+    containerEl.createEl("h3", { text: "Audit Logging" });
+
+    new Setting(containerEl)
+      .setName("Enable audit logging")
+      .setDesc("Log all Smart Folders operations to markdown files for review.")
+      .addToggle((t) =>
+        t
+          .setValue(this.pluginInstance.settings.auditLogEnabled)
+          .onChange(async (v) => {
+            this.pluginInstance.settings.auditLogEnabled = v;
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Audit log path")
+      .setDesc("Folder path where audit logs will be stored (relative to vault root).")
+      .addText((t) =>
+        t
+          .setPlaceholder("_sf/logs")
+          .setValue(this.pluginInstance.settings.auditLogPath)
+          .onChange(async (v) => {
+            this.pluginInstance.settings.auditLogPath = v.trim() || "_sf/logs";
+            await this.pluginInstance.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Entries per file")
+      .setDesc("Maximum number of log entries per file before rotating to a new file. Daily logs will automatically create new files as needed.")
+      .addText((t) =>
+        t
+          .setPlaceholder("100")
+          .setValue(String(this.pluginInstance.settings.auditEntriesPerFile))
+          .onChange(async (v) => {
+            const num = parseInt(v, 10);
+            if (!isNaN(num) && num > 0) {
+              this.pluginInstance.settings.auditEntriesPerFile = num;
+              await this.pluginInstance.saveSettings();
+            }
+          })
+      );
+  }
+}

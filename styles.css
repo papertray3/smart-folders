@@ -6,3 +6,662 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+:root {
+  --sf-gap: 12px;
+}
+
+.smart-folders-view {
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-bottom: 80px;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.smart-folders-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.smart-folders-header h2 {
+  margin: 0;
+}
+
+.smart-folders-toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.smart-folders-toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.smart-folders-toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 24px;
+  background-color: var(--background-modifier-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.smart-folders-toggle-switch:hover {
+  background-color: var(--background-modifier-border-hover);
+}
+
+.smart-folders-toggle-switch .slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background-color: var(--background-primary);
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.smart-folders-toggle-switch .slider-on {
+  transform: translateX(24px);
+  background-color: var(--interactive-accent);
+}
+
+.smart-folders-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-gap);
+  margin: var(--sf-gap) 0;
+}
+
+.smart-folders-breadcrumb a {
+  text-decoration: none;
+  color: var(--text-normal);
+}
+
+.smart-folders-breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.smart-folders-toolbar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.smart-folders-toolbar-buttons button {
+  padding: 4px 10px;
+}
+
+.sf-violations {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sf-violations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.sf-violations-header h4 {
+  margin: 0;
+}
+
+.sf-bulk-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.sf-bulk-actions button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.sf-violation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+}
+
+.sf-violation-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sf-violation-path {
+  font-family: var(--font-monospace);
+  font-size: 13px;
+}
+
+.sf-violation-reason {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.sf-violation-row button {
+  padding: 4px 8px;
+}
+
+.smart-folders-chips {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sf-chip {
+  background: var(--background-modifier-border);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.sf-chip:hover {
+  background: var(--background-modifier-hover);
+}
+
+.sf-inherited-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.sf-subfolders-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.sf-subfolders-section h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.sf-subfolder-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.sf-subfolder-row:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.sf-subfolder-name {
+  flex: 1;
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  color: var(--text-normal);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.sf-subfolder-name:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.sf-subfolder-rule-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sf-small-toggle {
+  width: 40px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.sf-small-toggle .slider {
+  width: 16px;
+  height: 16px;
+  top: 2px;
+  left: 2px;
+}
+
+.sf-small-toggle .slider-on {
+  transform: translateX(20px);
+}
+
+.sf-rules-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.sf-inherited-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.sf-inherited-rule-card {
+  border: 2px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  background-color: var(--background-secondary);
+}
+
+.sf-inherited-rule-card-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.sf-inherited-rule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sf-inherited-rule-name {
+  font-size: 14px;
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+.sf-inherited-rule-source {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-style: italic;
+}
+
+.sf-inherited-rule-source-link {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.sf-inherited-rule-source-link:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.sf-inherited-rule-body {
+  margin: 8px 0;
+}
+
+.sf-inherited-rule-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-normal);
+  font-family: var(--font-text);
+  line-height: 1.5;
+}
+
+.sf-inherited-rule-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.sf-inherited-rule-label {
+  font-size: 13px;
+  color: var(--text-normal);
+  font-weight: 500;
+}
+
+.sf-rules-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sf-rules-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.sf-rules-button-group {
+  display: flex;
+  gap: 8px;
+}
+
+.sf-run-rules-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.sf-run-rules-btn:hover:not(:disabled) {
+  background-color: var(--interactive-accent-hover);
+}
+
+.sf-run-rules-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sf-add-rule-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.sf-save-rules-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+.sf-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sf-rule-card {
+  border: 2px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  background-color: var(--background-primary);
+}
+
+.sf-rule-card-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.sf-folder-disabled-notice {
+  margin-bottom: 12px;
+  padding: 12px;
+  background-color: rgba(255, 150, 0, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 150, 0, 0.3);
+}
+
+.sf-folder-disabled-text {
+  font-size: 13px;
+  color: var(--text-warning, #ff9600);
+  font-weight: 600;
+}
+
+.sf-toggle-disabled {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+}
+
+.sf-rule-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sf-rule-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-normal);
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex: 1;
+}
+
+.sf-rule-name:hover {
+  border-color: var(--background-modifier-border);
+  background: var(--background-primary);
+}
+
+.sf-rule-name:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  background: var(--background-primary);
+}
+
+.sf-rule-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sf-rule-arrow-btn {
+  padding: 4px 8px;
+  font-size: 14px;
+  min-width: 30px;
+}
+
+.sf-rule-arrow-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.sf-rule-card-body {
+  padding: 8px 0;
+}
+
+.sf-rule-placeholder {
+  margin: 0;
+  font-style: italic;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.sf-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.sf-rule-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-normal);
+  min-width: 50px;
+}
+
+.sf-rule-select {
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sf-rule-select:hover {
+  border-color: var(--background-modifier-border-hover);
+}
+
+.sf-rule-input {
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  min-width: 120px;
+}
+
+.sf-rule-input-wide {
+  flex: 1;
+  min-width: 200px;
+}
+
+.sf-rule-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.sf-rule-operator {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.sf-rule-browse-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.sf-rule-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-left: 4px;
+}
+
+.sf-rule-checkbox-row {
+  margin-left: 58px;
+  gap: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.sf-rule-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.sf-rule-checkbox-label {
+  font-size: 13px;
+  color: var(--text-normal);
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+}
+
+.sf-rule-checkbox-label:hover {
+  color: var(--text-accent);
+}
+
+.smart-folders-ignored-notice {
+  margin-top: 24px;
+  padding: 20px;
+  border: 2px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background-color: var(--background-secondary);
+  text-align: center;
+}
+
+.smart-folders-ignored-notice h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: var(--text-warning);
+  font-size: 18px;
+}
+
+.smart-folders-ignored-notice p {
+  margin: 8px 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.smart-folders-ignored-notice button {
+  margin-top: 16px;
+}
+
+.sf-quarantine-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.sf-quarantine-section h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.sf-quarantine-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.sf-quarantine-row:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.sf-quarantine-filename {
+  flex: 1;
+  font-family: var(--font-monospace);
+  font-size: 13px;
+  color: var(--text-normal);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.sf-quarantine-filename:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.sf-quarantine-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sf-quarantine-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sf-quarantine-btn:hover {
+  background-color: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
+}
+
+.sf-quarantine-btn.mod-warning {
+  color: var(--text-error);
+  border-color: var(--background-modifier-error);
+}
+
+.sf-quarantine-btn.mod-warning:hover {
+  background-color: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
