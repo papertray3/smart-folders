@@ -89,4 +89,28 @@ describe("BoundaryStack", () => {
     stack.commitCandidate();
     expect(stack.getStack()).toEqual([]);
   });
+
+  it("popTo truncates directly to an already-committed level and clears any candidate", () => {
+    const stack = new BoundaryStack();
+    stack.handleDetection(boundary("Notes/Projects/a"));
+    stack.commitCandidate();
+    stack.handleDetection(boundary("Notes/Projects/a/b"));
+    stack.commitCandidate();
+    stack.handleDetection(boundary("Notes/Projects/a/b/c"));
+    stack.commitCandidate();
+    stack.handleDetection(boundary("Notes/Projects/z")); // leaves a pending replace candidate
+
+    stack.popTo("Notes/Projects/a");
+    expect(stack.getStack().map((b) => b.folderPath)).toEqual(["Notes/Projects/a"]);
+    expect(stack.getCandidate()).toBeUndefined();
+  });
+
+  it("popTo is a no-op when the path isn't on the stack", () => {
+    const stack = new BoundaryStack();
+    stack.handleDetection(boundary("Notes/Projects/a"));
+    stack.commitCandidate();
+
+    stack.popTo("Notes/Projects/unrelated");
+    expect(stack.getStack().map((b) => b.folderPath)).toEqual(["Notes/Projects/a"]);
+  });
 });

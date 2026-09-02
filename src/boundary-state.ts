@@ -84,4 +84,16 @@ export class BoundaryStack {
   dismissCandidate(): void {
     this.candidate = undefined;
   }
+
+  /**
+   * Direct pop to an already-committed level, e.g. from the widget's stack
+   * menu - no navigation required. Fires nothing (matches the free-pop rule);
+   * no-op if folderPath isn't currently on the stack.
+   */
+  popTo(folderPath: string): void {
+    const index = this.stack.findIndex((boundary) => boundary.folderPath === folderPath);
+    if (index === -1) return;
+    this.stack = this.stack.slice(0, index + 1);
+    this.candidate = undefined;
+  }
 }

@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, WorkspaceLeaf, TFolder, Setting, normalizePath } from "obsidian";
+import { App, Notice, Plugin, PluginSettingTab, WorkspaceLeaf, TFolder, Setting, normalizePath } from "obsidian";
 import { SmartFoldersManager } from "./manager";
 import { RuleBuilderView, VIEW_TYPE_RULE_BUILDER } from "./ui/rule-builder-view";
 import { DEFAULT_SETTINGS, SmartFoldersSettings, normalizeRuleActions } from "./types";
@@ -6,6 +6,7 @@ import { normalizeFolderPath } from "./utils/folder-path";
 import { ContextBoundary, getContextBoundaries, resolveContextBoundary } from "./context-boundary";
 import { BoundaryCandidate, BoundaryStack } from "./boundary-state";
 import { runBoundaryActions } from "./boundary-actions";
+import { BoundaryWidget } from "./ui/boundary-widget";
 import { findSmartFolderRoots, isIgnoredPath } from "./smart-root";
 
 export default class SmartFoldersPlugin extends Plugin {
@@ -13,6 +14,7 @@ export default class SmartFoldersPlugin extends Plugin {
   manager: SmartFoldersManager | null = null;
   /** In-memory only - see 08-context-boundary-events.md's Persistence note. */
   readonly boundaryStack = new BoundaryStack();
+  private boundaryWidget: BoundaryWidget | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -20,11 +22,20 @@ export default class SmartFoldersPlugin extends Plugin {
     this.manager = new SmartFoldersManager(this, () => this.settings);
     await this.manager.start();
 
+    this.boundaryWidget = new BoundaryWidget(this, this.addStatusBarItem());
+
     this.registerEvent(
       this.app.workspace.on("file-open", (file) => {
         this.boundaryStack.handleDetection(file ? this.resolveContextBoundary(file.path) : undefined);
+        this.boundaryWidget?.render();
       })
     );
+
+    this.addCommand({
+      id: "smart-folders-commit-boundary-candidate",
+      name: "Commit detected context boundary",
+      callback: () => this.commitBoundaryCandidateFromCommand(),
+    });
 
     this.addRibbonIcon("folder", "Open Smart Folders root", () => this.openRootView());
 
@@ -140,6 +151,20 @@ export default class SmartFoldersPlugin extends Plugin {
   /** Explicit dismissal of the current candidate; the committed stack is untouched. */
   dismissBoundaryCandidate(): void {
     this.boundaryStack.dismissCandidate();
+  }
+
+  /** Direct pop to an already-committed stack level (the widget's stack menu). Fires nothing. */
+  popBoundaryStackTo(folderPath: string): void {
+    this.boundaryStack.popTo(folderPath);
+  }
+
+  private async commitBoundaryCandidateFromCommand(): Promise<void> {
+    if (!this.getBoundaryCandidate()) {
+      new Notice("No detected context boundary to commit.");
+      return;
+    }
+    await this.commitBoundaryCandidate();
+    this.boundaryWidget?.render();
   }
 
   /** Top-level configured folders that act as Smart Folders entry points. */

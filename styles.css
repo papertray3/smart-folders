@@ -10,6 +10,44 @@ If your plugin does not need CSS, delete this file.
   --sf-gap: 12px;
 }
 
+.sf-boundary-widget {
+  display: flex;
+  align-items: center;
+}
+
+.sf-boundary-widget-empty {
+  color: var(--text-faint);
+}
+
+.sf-boundary-widget-current {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.sf-boundary-widget-current:hover {
+  color: var(--text-normal);
+}
+
+.sf-boundary-widget-dot {
+  color: var(--color-green, var(--text-success, #4caf50));
+}
+
+.sf-boundary-widget-arrow {
+  color: var(--text-faint);
+  margin: 0 2px;
+}
+
+.sf-boundary-widget-candidate {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--color-yellow, var(--text-warning, #e0ac00));
+}
+
+.sf-boundary-widget-candidate:hover {
+  text-decoration: underline;
+}
+
 .smart-folders-view {
   padding-left: 16px;
   padding-right: 16px;
