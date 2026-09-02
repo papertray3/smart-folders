@@ -54,7 +54,7 @@ export default class SmartFoldersPlugin extends Plugin {
   }
 
   private async openViewForCurrentFolder() {
-    const folder = this.getCurrentFolder();
+    const folder = await this.getCurrentFolder();
     await this.openViewForFolder(folder);
   }
 
@@ -64,7 +64,7 @@ export default class SmartFoldersPlugin extends Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
 
-  private getCurrentFolder(): string {
+  private async getCurrentFolder(): Promise<string> {
     // First, try to get folder from active file
     const file = this.app.workspace.getActiveFile();
     if (file) return file.parent?.path ?? "/";
@@ -72,6 +72,9 @@ export default class SmartFoldersPlugin extends Plugin {
     // If no active file, check if there's already a Smart Folders view open and use its folder
     const existingLeaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_RULE_BUILDER)[0];
     if (existingLeaf) {
+      // A restored leaf can be deferred (view not yet instantiated); casting
+      // .view before it loads would be unsafe. See WorkspaceLeaf#isDeferred, @since 1.7.2.
+      if (existingLeaf.isDeferred) await existingLeaf.loadIfDeferred();
       const view = existingLeaf.view as RuleBuilderView;
       const state = view.getState();
       if (state?.folder) return state.folder;

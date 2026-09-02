@@ -100,6 +100,14 @@ export class RuleBuilderView extends ItemView {
       })
     );
 
+    // Obsidian has no public workspace event for "folder clicked in file
+    // explorer" (folders don't become the active file, so "file-open" above
+    // never fires for them). This DOM listener is the only way to track that
+    // selection; it's scoped to just the folder case (file clicks are already
+    // covered by "file-open") to keep the internal-DOM surface as small as
+    // possible. If the explorer's internal structure changes, this silently
+    // stops updating rather than throwing - the "file-open" listener still
+    // keeps the view in sync for file-driven navigation.
     const explorer = this.app.workspace.getLeavesOfType("file-explorer")[0]?.view as any;
     const explorerEl: HTMLElement | undefined = explorer?.containerEl;
     if (explorerEl) {
@@ -108,21 +116,9 @@ export class RuleBuilderView extends ItemView {
         const path = target?.getAttribute("data-path");
         if (!path) return;
         const file = this.app.vault.getAbstractFileByPath(path);
-        if (file instanceof TFolder) {
-          console.log("Folder clicked in explorer:", file.path, "current:", this.folder);
-          if (file.path !== this.folder) {
-            this.folder = file.path;
-            console.log("Folder changed, re-rendering");
-            this.render();
-          }
-        } else if (file instanceof TFile) {
-          const parentPath = file.parent?.path ?? "/";
-          console.log("File clicked in explorer, parent:", parentPath, "current:", this.folder);
-          if (parentPath !== this.folder) {
-            this.folder = parentPath;
-            console.log("Folder changed, re-rendering");
-            this.render();
-          }
+        if (file instanceof TFolder && file.path !== this.folder) {
+          this.folder = file.path;
+          this.render();
         }
       });
     }
@@ -166,10 +162,20 @@ export class RuleBuilderView extends ItemView {
 
       const settingsBtn = ignoredNotice.createEl("button", { text: "Open Settings", cls: "mod-cta" });
       settingsBtn.onclick = () => {
-        // @ts-ignore - accessing private API
-        this.app.setting.open();
-        // @ts-ignore
-        this.app.setting.openTabById(this.plugin.manifest.id);
+        // app.setting isn't part of the public obsidian.d.ts surface, but it's
+        // the standard community-plugin way to jump into a plugin's settings
+        // tab - there's no publicly documented alternative. Guarded with a
+        // try/catch so an internal API shape change degrades to a Notice
+        // instead of throwing.
+        try {
+          // @ts-ignore - accessing private API
+          this.app.setting.open();
+          // @ts-ignore
+          this.app.setting.openTabById(this.plugin.manifest.id);
+        } catch (error) {
+          console.error("Smart Folders: failed to open settings tab", error);
+          new Notice("Couldn't open settings automatically - open it from the Obsidian settings menu.");
+        }
       };
 
       return;
@@ -671,10 +677,7 @@ export class RuleBuilderView extends ItemView {
         // Up arrow
         const upBtn = ruleControls.createEl("button", { text: "↑", cls: "sf-rule-arrow-btn" });
         upBtn.onclick = async () => {
-          console.log("Up button clicked!", { index, ruleName: rule.name });
           if (index > 0) {
-            console.log("Moving up from", index, "to", index - 1);
-
             // Get IDs BEFORE swapping
             const allRules = this.plugin.settings.rules;
             const currentId = folderRules[index].id;
@@ -690,8 +693,6 @@ export class RuleBuilderView extends ItemView {
 
             await this.plugin.saveSettings();
             this.render();
-          } else {
-            console.log("Already at top, cannot move up");
           }
         };
         if (index === 0) upBtn.disabled = true;
@@ -699,10 +700,7 @@ export class RuleBuilderView extends ItemView {
         // Down arrow
         const downBtn = ruleControls.createEl("button", { text: "↓", cls: "sf-rule-arrow-btn" });
         downBtn.onclick = async () => {
-          console.log("Down button clicked!", { index, ruleName: rule.name, totalRules: folderRules.length });
           if (index < folderRules.length - 1) {
-            console.log("Moving down from", index, "to", index + 1);
-
             // Get IDs BEFORE swapping
             const allRules = this.plugin.settings.rules;
             const currentId = folderRules[index].id;
@@ -711,22 +709,13 @@ export class RuleBuilderView extends ItemView {
             const currentGlobalIdx = allRules.findIndex((r) => r.id === currentId);
             const nextGlobalIdx = allRules.findIndex((r) => r.id === nextId);
 
-            console.log("Global indices BEFORE swap:", { currentGlobalIdx, nextGlobalIdx });
-
             if (currentGlobalIdx >= 0 && nextGlobalIdx >= 0) {
               // Swap in the global array
               [allRules[currentGlobalIdx], allRules[nextGlobalIdx]] = [allRules[nextGlobalIdx], allRules[currentGlobalIdx]];
-              console.log("Swapped in global array");
-              console.log("After swap, rules[7]:", allRules[7]?.id, "rules[8]:", allRules[8]?.id);
             }
 
-            console.log("About to save settings...");
             await this.plugin.saveSettings();
-            console.log("Settings saved, checking if they persisted...");
-            console.log("After save, rules[7]:", this.plugin.settings.rules[7]?.id, "rules[8]:", this.plugin.settings.rules[8]?.id);
             this.render();
-          } else {
-            console.log("Already at bottom, cannot move down");
           }
         };
         if (index === folderRules.length - 1) downBtn.disabled = true;
@@ -1021,7 +1010,6 @@ export class RuleBuilderView extends ItemView {
 
     // Subfolders section at the bottom
     const subfolders = this.getDescendantFolders(this.folder);
-    console.log("Rendering descendants for folder:", this.folder, "found:", subfolders.length);
     if (subfolders.length > 0) {
       const subfoldersSection = containerEl.createDiv({ cls: "sf-subfolders-section" });
       subfoldersSection.createEl("h3", { text: "Descendant Folders" });

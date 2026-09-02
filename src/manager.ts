@@ -52,7 +52,6 @@ export class SmartFoldersManager {
 
   private processMaybe(file: TAbstractFile, trigger: string) {
     const debugMsg = (msg: string) => {
-      console.log(`[SF-DEBUG] ${msg}`);
       this.auditLogger.log({
         timestamp: new Date().toISOString(),
         operation: "debug",
