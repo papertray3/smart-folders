@@ -31,6 +31,13 @@ export default class SmartFoldersPlugin extends Plugin {
       })
     );
 
+    // Folders don't fire "file-open" (same Obsidian limitation already
+    // documented/worked around in RuleBuilderView), so clicking one in the
+    // file explorer with nothing opened wouldn't otherwise reach boundary
+    // detection at all. Deferred to onLayoutReady since onload() can run
+    // before the file-explorer leaf exists (e.g. on Obsidian startup).
+    this.app.workspace.onLayoutReady(() => this.registerFolderClickBoundaryDetection());
+
     this.addCommand({
       id: "smart-folders-commit-boundary-candidate",
       name: "Commit detected context boundary",
@@ -224,6 +231,30 @@ export default class SmartFoldersPlugin extends Plugin {
     if (existing) return existing;
     // Open in main editor area (like a regular note tab)
     return this.app.workspace.getLeaf(true);
+  }
+
+  /**
+   * Obsidian has no public workspace event for "folder clicked in file
+   * explorer" (folders don't become the active file, so "file-open" never
+   * fires for them) - this DOM listener is the only way to detect it, scoped
+   * to just the folder case since file clicks are already covered by
+   * "file-open". If the explorer's internal structure changes, this silently
+   * stops updating rather than throwing - file-driven detection still works.
+   */
+  private registerFolderClickBoundaryDetection() {
+    const explorerEl = (this.app.workspace.getLeavesOfType("file-explorer")[0]?.view as { containerEl?: HTMLElement } | undefined)
+      ?.containerEl;
+    if (!explorerEl) return;
+
+    this.registerDomEvent(explorerEl, "click", (evt: MouseEvent) => {
+      const target = (evt.target as HTMLElement)?.closest("[data-path]") as HTMLElement | null;
+      const path = target?.getAttribute("data-path");
+      if (!path) return;
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof TFolder)) return; // file clicks: file-open already handles it
+      this.boundaryStack.handleDetection(this.resolveContextBoundary(file.path));
+      this.boundaryWidget?.render();
+    });
   }
 
   private registerFolderContextMenu() {
