@@ -36,6 +36,7 @@ export class RuleEvaluator {
     // Handle composite conditions (AND/OR)
     if (isCompositeCondition(rule.condition)) {
       const { operator, conditions } = rule.condition;
+      if (conditions.length === 0) return false;
 
       if (operator === "AND") {
         // All conditions must be true

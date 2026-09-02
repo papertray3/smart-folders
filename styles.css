@@ -584,6 +584,36 @@ If your plugin does not need CSS, delete this file.
   margin-top: 10px;
 }
 
+.sf-condition-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sf-condition-row {
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  flex-wrap: wrap;
+}
+
+.sf-condition-number {
+  min-width: 1.5em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sf-condition-controls {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.sf-condition-controls button {
+  padding: 2px 7px;
+}
+
 .sf-action-container {
   padding: 8px;
   border: 1px solid var(--background-modifier-border);

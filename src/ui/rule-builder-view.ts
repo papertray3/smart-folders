@@ -861,18 +861,25 @@ export class RuleBuilderView extends ItemView {
 
           // Render each condition
           if (isCompositeCondition(rule.condition)) {
-            rule.condition.conditions.forEach((cond, idx) => {
-              this.renderSingleConditionRow(conditionSection, cond, idx, () => {
-                // Remove condition callback
-                if (isCompositeCondition(rule.condition) && rule.condition.conditions.length > 1) {
-                  rule.condition.conditions.splice(idx, 1);
-                  // If only one condition left, convert back to single
-                  if (rule.condition.conditions.length === 1) {
-                    rule.condition = rule.condition.conditions[0];
-                  }
-                  this.markDirty();
-                  this.render();
-                }
+            const conditions = rule.condition.conditions;
+            conditions.forEach((cond, idx) => {
+              this.renderSingleConditionRow(conditionSection, cond, idx, conditions.length, {
+                moveUp: () => {
+                  if (idx === 0) return;
+                  [conditions[idx - 1], conditions[idx]] = [conditions[idx], conditions[idx - 1]];
+                },
+                moveDown: () => {
+                  if (idx >= conditions.length - 1) return;
+                  [conditions[idx], conditions[idx + 1]] = [conditions[idx + 1], conditions[idx]];
+                },
+                duplicate: () => {
+                  conditions.splice(idx + 1, 0, JSON.parse(JSON.stringify(cond)) as SingleCondition);
+                },
+                remove: () => {
+                  if (conditions.length <= 1) return;
+                  conditions.splice(idx, 1);
+                  if (conditions.length === 1) rule.condition = conditions[0];
+                },
               });
             });
           }
@@ -1161,15 +1168,35 @@ export class RuleBuilderView extends ItemView {
     container: HTMLElement,
     condition: SingleCondition,
     index: number,
-    onRemove: () => void
+    total: number,
+    callbacks: { moveUp: () => void; moveDown: () => void; duplicate: () => void; remove: () => void },
   ) {
     const row = container.createDiv({ cls: "sf-rule-row sf-condition-row" });
     row.createSpan({ text: `${index + 1}.`, cls: "sf-condition-number" });
 
     this.renderSingleConditionInputs(row, condition);
 
-    const removeBtn = row.createEl("button", { text: "✕", cls: "sf-remove-condition-btn" });
-    removeBtn.onclick = onRemove;
+    const controls = row.createDiv({ cls: "sf-condition-controls" });
+    const runAndRender = (callback: () => void) => {
+      callback();
+      this.markDirty();
+      this.render();
+    };
+
+    const upBtn = controls.createEl("button", { text: "↑", attr: { title: "Move condition up" } });
+    upBtn.disabled = index === 0;
+    upBtn.onclick = () => runAndRender(callbacks.moveUp);
+
+    const downBtn = controls.createEl("button", { text: "↓", attr: { title: "Move condition down" } });
+    downBtn.disabled = index === total - 1;
+    downBtn.onclick = () => runAndRender(callbacks.moveDown);
+
+    const duplicateBtn = controls.createEl("button", { text: "⎘", attr: { title: "Duplicate condition" } });
+    duplicateBtn.onclick = () => runAndRender(callbacks.duplicate);
+
+    const removeBtn = controls.createEl("button", { text: "✕", attr: { title: "Remove condition" } });
+    removeBtn.disabled = total === 1;
+    removeBtn.onclick = () => runAndRender(callbacks.remove);
   }
 
   private renderSingleConditionInputs(container: HTMLElement, condition: SingleCondition) {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { RuleEvaluator } from './rule-evaluator';
-import { SimpleRule, RuleContext } from './types';
+import { SimpleRule, RuleContext, SingleCondition } from './types';
 
 describe('RuleEvaluator', () => {
   let evaluator: RuleEvaluator;
@@ -289,6 +289,66 @@ describe('RuleEvaluator', () => {
       };
 
       expect(evaluator.matches(rule, context)).toBe(false);
+    });
+  });
+
+  describe('Composite Conditions', () => {
+    const compositeRule = (operator: 'AND' | 'OR', conditions: SingleCondition[]): SimpleRule => ({
+      id: 'composite',
+      name: 'Composite rule',
+      enabled: true,
+      folderPath: '/',
+      scopeFolder: '/',
+      condition: { operator, conditions },
+      actions: [{ type: 'add-tag', tag: 'matched' }],
+    });
+
+    const context: RuleContext = {
+      file: {} as any,
+      frontmatter: { status: 'active', priority: 'high' },
+      tags: ['#project', '#review'],
+    };
+
+    it('matches AND when every condition matches', () => {
+      const rule = compositeRule('AND', [
+        { type: 'frontmatter', operator: 'equals', field: 'status', value: 'active' },
+        { type: 'tag', operator: 'has', value: 'project' },
+      ]);
+
+      expect(evaluator.matches(rule, context)).toBe(true);
+    });
+
+    it('does not match AND when one condition fails', () => {
+      const rule = compositeRule('AND', [
+        { type: 'frontmatter', operator: 'equals', field: 'status', value: 'active' },
+        { type: 'tag', operator: 'has', value: 'archived' },
+      ]);
+
+      expect(evaluator.matches(rule, context)).toBe(false);
+    });
+
+    it('matches OR when any condition matches', () => {
+      const rule = compositeRule('OR', [
+        { type: 'frontmatter', operator: 'equals', field: 'status', value: 'done' },
+        { type: 'frontmatter', operator: 'equals', field: 'priority', value: 'high' },
+        { type: 'tag', operator: 'has', value: 'archived' },
+      ]);
+
+      expect(evaluator.matches(rule, context)).toBe(true);
+    });
+
+    it('does not match OR when every condition fails', () => {
+      const rule = compositeRule('OR', [
+        { type: 'frontmatter', operator: 'equals', field: 'status', value: 'done' },
+        { type: 'tag', operator: 'has', value: 'archived' },
+      ]);
+
+      expect(evaluator.matches(rule, context)).toBe(false);
+    });
+
+    it('treats an empty imported condition group as non-matching', () => {
+      expect(evaluator.matches(compositeRule('AND', []), context)).toBe(false);
+      expect(evaluator.matches(compositeRule('OR', []), context)).toBe(false);
     });
   });
 });
