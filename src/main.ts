@@ -3,7 +3,7 @@ import { SmartFoldersManager } from "./manager";
 import { RuleBuilderView, VIEW_TYPE_RULE_BUILDER } from "./ui/rule-builder-view";
 import { DEFAULT_SETTINGS, SmartFoldersSettings, normalizeRuleActions } from "./types";
 import { normalizeFolderPath } from "./utils/folder-path";
-import { ContextBoundary, ContextBoundaryConflict, getContextBoundaries, getContextBoundaryConflict, getDescendantBoundaries, resolveContextBoundary } from "./context-boundary";
+import { ContextBoundary, getContextBoundaries, resolveContextBoundary } from "./context-boundary";
 import { findSmartFolderRoots, isIgnoredPath } from "./smart-root";
 
 export default class SmartFoldersPlugin extends Plugin {
@@ -84,7 +84,7 @@ export default class SmartFoldersPlugin extends Plugin {
     return this.settings.folderPolicies[normalizeFolderPath(folderPath)]?.hubPage;
   }
 
-  /** All configured, non-nested workspace context boundaries. */
+  /** All configured workspace context boundaries. Boundaries may nest. */
   getContextBoundaries(): ContextBoundary[] {
     return getContextBoundaries(this.settings.folderPolicies);
   }
@@ -92,16 +92,6 @@ export default class SmartFoldersPlugin extends Plugin {
   /** Resolve a vault-relative file or folder path to its owning context boundary. */
   resolveContextBoundary(path: string): ContextBoundary | undefined {
     return resolveContextBoundary(path, this.settings.folderPolicies);
-  }
-
-  /** Explain why a folder cannot become a boundary without creating nesting. */
-  getContextBoundaryConflict(folderPath: string): ContextBoundaryConflict | undefined {
-    return getContextBoundaryConflict(folderPath, this.settings.folderPolicies);
-  }
-
-  /** All context boundaries nested beneath the given folder, e.g. to warn before they'd be displaced. */
-  getDescendantContextBoundaries(folderPath: string): ContextBoundary[] {
-    return getDescendantBoundaries(folderPath, this.settings.folderPolicies);
   }
 
   /** Top-level configured folders that act as Smart Folders entry points. */

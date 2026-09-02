@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getContextBoundaries, getContextBoundaryConflict, resolveContextBoundary } from "./context-boundary";
+import { getContextBoundaries, resolveContextBoundary } from "./context-boundary";
 import { FolderPolicy } from "./types";
 
 const policy = (hubPage?: string, contextBoundary = false): FolderPolicy => ({
@@ -13,12 +13,13 @@ describe("context boundaries", () => {
     "Notes/Projects/smart-folders": policy("Notes/Projects/smart-folders/smart-folders.md", true),
     "Notes/Projects/smart-folders/00_Admin": policy("Notes/Projects/smart-folders/00_Admin/Admin.md"),
     "Notes/Projects/agent-client": policy("Notes/Projects/agent-client/agent-client.md", true),
-    "Notes/Projects/missing-hub": policy(undefined, true),
+    "Notes/Projects/no-hub": policy(undefined, true),
   };
 
-  it("lists only enabled boundaries with hub pages", () => {
+  it("lists all enabled boundaries, with or without a hub page", () => {
     expect(getContextBoundaries(policies).map((boundary) => boundary.folderPath)).toEqual([
       "Notes/Projects/agent-client",
+      "Notes/Projects/no-hub",
       "Notes/Projects/smart-folders",
     ]);
   });
@@ -34,25 +35,11 @@ describe("context boundaries", () => {
     expect(resolveContextBoundary("Notes/Reference/example.md", policies)).toBeUndefined();
   });
 
-  it("reports the nearest ancestor boundary", () => {
-    expect(getContextBoundaryConflict("Notes/Projects/smart-folders/00_Admin", policies)).toEqual({
-      type: "ancestor",
-      boundary: {
-        folderPath: "Notes/Projects/smart-folders",
-        hubPage: "Notes/Projects/smart-folders/smart-folders.md",
-      },
-    });
-  });
-
-  it("reports a descendant boundary when enabling a parent would create nesting", () => {
-    expect(getContextBoundaryConflict("Notes/Projects", policies)?.type).toBe("descendant");
-  });
-
-  it("uses the deepest boundary deterministically for malformed nested settings", () => {
-    const malformed = {
+  it("resolves to the deepest boundary when boundaries are nested", () => {
+    const nested = {
       Root: policy("Root/Root.md", true),
       "Root/Nested": policy("Root/Nested/Nested.md", true),
     };
-    expect(resolveContextBoundary("Root/Nested/file.md", malformed)?.folderPath).toBe("Root/Nested");
+    expect(resolveContextBoundary("Root/Nested/file.md", nested)?.folderPath).toBe("Root/Nested");
   });
 });

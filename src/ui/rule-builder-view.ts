@@ -5,7 +5,6 @@ import { FolderPickerModal } from "./folder-picker-modal";
 import { NotePickerModal } from "./note-picker-modal";
 import { nanoid } from "../utils/nanoid";
 import { normalizeFolderPath as normalize } from "../utils/folder-path";
-import { ContextBoundary } from "../context-boundary";
 
 export const VIEW_TYPE_RULE_BUILDER = "smart-folders-rule-builder";
 
@@ -344,12 +343,7 @@ export class RuleBuilderView extends ItemView {
     };
     if (savedPolicy.hubPage) {
       const hubClearBtn = hubControls.createEl("button", { text: "Clear" });
-      hubClearBtn.disabled = savedPolicy.contextBoundary === true;
-      if (hubClearBtn.disabled) {
-        hubClearBtn.title = "Turn off the context boundary before clearing its hub page.";
-      }
       hubClearBtn.onclick = async () => {
-        if (savedPolicy.contextBoundary) return;
         savedPolicy.hubPage = undefined;
         setPolicy(this.plugin.settings, this.folder, savedPolicy);
         await this.plugin.saveSettings();
@@ -357,86 +351,39 @@ export class RuleBuilderView extends ItemView {
       };
     }
 
-    // Context boundary: an inset sub-option of Hub page, not a standalone row - it's
-    // meaningless without a hub page, so it only shows once one is set (or, for the
-    // ancestor-inherited case, it's purely informational and doesn't need one here).
-    const boundaryHelp = "Use this folder and all of its subfolders as one explicit workspace context. Smart Folders can detect movement between context boundaries so context-management integrations—including compatible AI agents—can offer the appropriate handoff or automation. A boundary requires a hub page, and boundaries cannot be nested.";
-    const boundaryConflict = this.plugin.getContextBoundaryConflict(this.folder);
-    const isAncestorConflict = boundaryConflict?.type === "ancestor";
+    // Context boundary: independent of Hub page (decoupled 2026-09-02, see
+    // 00_Admin/08-context-boundary-events.md) - a boundary doesn't require a hub
+    // page, and nesting is allowed (state is a stack, not a single value), so
+    // there's no conflict to gate the checkbox on or resolve here.
+    const boundaryHelp = "Use this folder and all of its subfolders as one explicit workspace context. Smart Folders can detect movement between context boundaries so context-management integrations—including compatible AI agents—can offer the appropriate handoff or automation.";
+    const boundaryRow = policyList.createDiv({ cls: "sf-folder-config-row" });
+    const boundaryInfo = boundaryRow.createDiv({ cls: "sf-folder-config-info" });
+    const boundaryName = boundaryInfo.createDiv({ cls: "sf-folder-config-name sf-context-boundary-name" });
+    boundaryName.createSpan({ text: "Context boundary" });
+    const boundaryInfoButton = boundaryName.createEl("button", {
+      cls: "clickable-icon sf-context-boundary-info",
+      attr: { "aria-label": boundaryHelp, title: boundaryHelp, type: "button" },
+    });
+    setIcon(boundaryInfoButton, "info");
+    boundaryInfoButton.onclick = () => new Notice(boundaryHelp, 10000);
+    boundaryInfo.createDiv({
+      text: "Mark this folder and its subfolders as one explicit workspace context.",
+      cls: "sf-folder-config-description",
+    });
 
-    if (savedPolicy.hubPage || isAncestorConflict) {
-      const boundaryInline = hubRow.createDiv({ cls: "sf-context-boundary-inline" });
-      const boundaryLabelRow = boundaryInline.createDiv({ cls: "sf-context-boundary-inline-label" });
-
-      if (isAncestorConflict) {
-        boundaryLabelRow.createSpan({ text: "Context boundary:", cls: "sf-context-boundary-inline-name" });
-        const boundaryLink = boundaryLabelRow.createEl("a", {
-          text: boundaryConflict.boundary.folderPath,
-          href: "#",
-          cls: "sf-context-boundary-link",
-          attr: { "aria-label": `Open context boundary ${boundaryConflict.boundary.folderPath}` },
-        });
-        boundaryLink.onclick = (event) => {
-          event.preventDefault();
-          this.folder = boundaryConflict.boundary.folderPath;
-          this.render();
-        };
-        boundaryInline.createDiv({
-          text: "This folder inherits its workspace context from a parent boundary.",
-          cls: "sf-context-boundary-inline-desc",
-        });
-      } else {
-        const boundaryToggle = boundaryLabelRow.createEl("input", {
-          type: "checkbox",
-          cls: "sf-context-boundary-toggle",
-          attr: { "aria-label": "Make this a context boundary" },
-        });
-        boundaryToggle.checked = savedPolicy.contextBoundary === true;
-        boundaryLabelRow.createSpan({ text: "Make this a context boundary", cls: "sf-context-boundary-inline-name" });
-
-        const boundaryInfoButton = boundaryLabelRow.createEl("button", {
-          cls: "clickable-icon sf-context-boundary-info",
-          attr: { "aria-label": boundaryHelp, title: boundaryHelp, type: "button" },
-        });
-        setIcon(boundaryInfoButton, "info");
-        boundaryInfoButton.onclick = () => new Notice(boundaryHelp, 10000);
-
-        let boundaryDescription = "Treat this folder's hub page as the context description for the entire folder tree.";
-        if (boundaryConflict?.type === "descendant") {
-          boundaryDescription = `${boundaryConflict.boundary.folderPath} is currently a nested boundary. Enabling this will turn that one off, since boundaries cannot be nested.`;
-        }
-        boundaryInline.createDiv({ text: boundaryDescription, cls: "sf-context-boundary-inline-desc" });
-
-        boundaryToggle.onchange = async () => {
-          if (boundaryToggle.checked) {
-            const currentConflict = this.plugin.getContextBoundaryConflict(this.folder);
-            if (currentConflict?.type === "ancestor") {
-              boundaryToggle.checked = false;
-              new Notice("Context boundaries cannot be nested.");
-              return;
-            }
-
-            const descendants = this.plugin.getDescendantContextBoundaries(this.folder);
-            if (descendants.length > 0) {
-              const confirmed = await confirmBoundaryPromotion(this.app, descendants);
-              if (!confirmed) {
-                boundaryToggle.checked = false;
-                return;
-              }
-              for (const boundary of descendants) {
-                const descendantPolicy = getOrCreatePolicy(this.plugin.settings, boundary.folderPath);
-                descendantPolicy.contextBoundary = undefined;
-                setPolicy(this.plugin.settings, boundary.folderPath, descendantPolicy);
-              }
-            }
-          }
-          savedPolicy.contextBoundary = boundaryToggle.checked || undefined;
-          setPolicy(this.plugin.settings, this.folder, savedPolicy);
-          await this.plugin.saveSettings();
-          this.render();
-        };
-      }
-    }
+    const boundaryControl = boundaryRow.createDiv({ cls: "sf-folder-config-control" });
+    const boundaryToggle = boundaryControl.createEl("input", {
+      type: "checkbox",
+      cls: "sf-context-boundary-toggle",
+      attr: { "aria-label": "Make this a context boundary" },
+    });
+    boundaryToggle.checked = savedPolicy.contextBoundary === true;
+    boundaryToggle.onchange = async () => {
+      savedPolicy.contextBoundary = boundaryToggle.checked || undefined;
+      setPolicy(this.plugin.settings, this.folder, savedPolicy);
+      await this.plugin.saveSettings();
+      this.render();
+    };
 
     const storedViolations = this.plugin.manager?.getStoredViolations(this.folder) ?? [];
 
@@ -1830,52 +1777,6 @@ async function confirmDeletion(app: App, itemName: string): Promise<boolean> {
         };
 
         const confirmBtn = buttonContainer.createEl("button", { text: "Delete", cls: "mod-warning" });
-        confirmBtn.onclick = () => {
-          this.close();
-          resolve(true);
-        };
-      }
-
-      onClose() {
-        const { contentEl } = this;
-        contentEl.empty();
-      }
-    }
-
-    const modal = new ConfirmModal(app);
-    modal.open();
-  });
-}
-
-async function confirmBoundaryPromotion(app: App, descendants: ContextBoundary[]): Promise<boolean> {
-  return new Promise((resolve) => {
-    class ConfirmModal extends Modal {
-      constructor(app: App) {
-        super(app);
-      }
-
-      onOpen() {
-        const { contentEl } = this;
-        contentEl.createEl("h2", { text: "Replace nested context boundaries?" });
-        contentEl.createEl("p", {
-          text: descendants.length === 1
-            ? `"${descendants[0].folderPath}" is currently a context boundary. Making this folder a boundary will turn that one off, since boundaries cannot be nested.`
-            : "The following folders are currently context boundaries. Making this folder a boundary will turn them all off, since boundaries cannot be nested:",
-        });
-        if (descendants.length > 1) {
-          const list = contentEl.createEl("ul");
-          descendants.forEach((boundary) => list.createEl("li", { text: boundary.folderPath }));
-        }
-
-        const buttonContainer = contentEl.createDiv({ cls: "modal-button-container" });
-
-        const cancelBtn = buttonContainer.createEl("button", { text: "Cancel" });
-        cancelBtn.onclick = () => {
-          this.close();
-          resolve(false);
-        };
-
-        const confirmBtn = buttonContainer.createEl("button", { text: "Make this the boundary", cls: "mod-warning" });
         confirmBtn.onclick = () => {
           this.close();
           resolve(true);

@@ -748,46 +748,6 @@ If your plugin does not need CSS, delete this file.
   cursor: pointer;
 }
 
-.sf-context-boundary-toggle:disabled {
-  cursor: not-allowed;
-}
-
-.sf-context-boundary-inline {
-  grid-column: 1 / -1;
-  margin-top: 10px;
-  padding-top: 10px;
-  padding-left: 20px;
-  border-top: 1px dashed var(--background-modifier-border);
-}
-
-.sf-context-boundary-inline-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sf-context-boundary-inline-name {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.sf-context-boundary-inline-desc {
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--text-faint);
-  line-height: var(--line-height-normal);
-}
-
-.sf-context-boundary-link {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  color: var(--text-accent);
-  font-family: var(--font-monospace);
-  font-size: 13px;
-}
-
 @media (max-width: 700px) {
   .sf-folder-config-row {
     grid-template-columns: 1fr;
