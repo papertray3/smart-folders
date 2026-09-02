@@ -4,17 +4,26 @@ import { RuleBuilderView, VIEW_TYPE_RULE_BUILDER } from "./ui/rule-builder-view"
 import { DEFAULT_SETTINGS, SmartFoldersSettings, normalizeRuleActions } from "./types";
 import { normalizeFolderPath } from "./utils/folder-path";
 import { ContextBoundary, getContextBoundaries, resolveContextBoundary } from "./context-boundary";
+import { BoundaryCandidate, BoundaryStack } from "./boundary-state";
 import { findSmartFolderRoots, isIgnoredPath } from "./smart-root";
 
 export default class SmartFoldersPlugin extends Plugin {
   settings: SmartFoldersSettings = DEFAULT_SETTINGS;
   manager: SmartFoldersManager | null = null;
+  /** In-memory only - see 08-context-boundary-events.md's Persistence note. */
+  readonly boundaryStack = new BoundaryStack();
 
   async onload(): Promise<void> {
     await this.loadSettings();
 
     this.manager = new SmartFoldersManager(this, () => this.settings);
     await this.manager.start();
+
+    this.registerEvent(
+      this.app.workspace.on("file-open", (file) => {
+        this.boundaryStack.handleDetection(file ? this.resolveContextBoundary(file.path) : undefined);
+      })
+    );
 
     this.addRibbonIcon("folder", "Open Smart Folders root", () => this.openRootView());
 
@@ -92,6 +101,26 @@ export default class SmartFoldersPlugin extends Plugin {
   /** Resolve a vault-relative file or folder path to its owning context boundary. */
   resolveContextBoundary(path: string): ContextBoundary | undefined {
     return resolveContextBoundary(path, this.settings.folderPolicies);
+  }
+
+  /** Committed boundary stack, innermost last. In-memory only - resets on reload. */
+  getBoundaryStack(): readonly ContextBoundary[] {
+    return this.boundaryStack.getStack();
+  }
+
+  /** A newly-detected boundary not yet committed, if any. */
+  getBoundaryCandidate(): BoundaryCandidate | undefined {
+    return this.boundaryStack.getCandidate();
+  }
+
+  /** Explicit commit of the current candidate (the future widget's yellow -> green click). */
+  commitBoundaryCandidate(): void {
+    this.boundaryStack.commitCandidate();
+  }
+
+  /** Explicit dismissal of the current candidate; the committed stack is untouched. */
+  dismissBoundaryCandidate(): void {
+    this.boundaryStack.dismissCandidate();
   }
 
   /** Top-level configured folders that act as Smart Folders entry points. */
