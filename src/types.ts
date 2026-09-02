@@ -24,6 +24,15 @@ export interface CompositeCondition {
 // Rule condition can be either simple or composite
 export type RuleCondition = SingleCondition | CompositeCondition;
 
+export interface RuleAction {
+  type: ActionType;
+  targetFolder?: string; // For move-file action
+  tag?: string; // For add-tag/remove-tag actions
+  field?: string; // For set-frontmatter/remove-frontmatter actions
+  value?: string; // For set-frontmatter action
+  lazyMatch?: boolean; // For move-file: skip if already in target folder tree
+}
+
 // Type guard to check if a condition is composite
 export function isCompositeCondition(condition: RuleCondition): condition is CompositeCondition {
   return 'operator' in condition &&
@@ -38,13 +47,22 @@ export interface SimpleRule {
   folderPath: string; // Where the rule is defined/displayed in UI
   scopeFolder: string; // Where the rule searches for files ("/" = vault root)
   condition: RuleCondition;
-  action: {
-    type: ActionType;
-    targetFolder?: string; // For move-file action
-    tag?: string; // For add-tag/remove-tag actions
-    field?: string; // For set-frontmatter/remove-frontmatter actions
-    value?: string; // For set-frontmatter action
-    lazyMatch?: boolean; // For move-file: skip if already in target folder tree
+  actions?: RuleAction[];
+  /** Legacy persisted shape. Normalized to actions[] when settings load. */
+  action?: RuleAction;
+}
+
+export function getRuleActions(rule: SimpleRule): RuleAction[] {
+  if (rule.actions?.length) return rule.actions;
+  return rule.action ? [rule.action] : [];
+}
+
+export function normalizeRuleActions(rule: SimpleRule): SimpleRule {
+  if (!rule.action) return rule;
+  const { action, ...currentRule } = rule;
+  return {
+    ...currentRule,
+    actions: rule.actions?.length ? rule.actions : [action],
   };
 }
 

@@ -577,6 +577,48 @@ If your plugin does not need CSS, delete this file.
   color: var(--text-accent);
 }
 
+.sf-actions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sf-action-container {
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+
+.sf-action-row {
+  flex-wrap: wrap;
+}
+
+.sf-action-number {
+  min-width: 1.5em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sf-action-controls {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.sf-action-controls button {
+  padding: 2px 7px;
+}
+
+.sf-action-option-row {
+  margin: 6px 0 0 2em;
+}
+
+.sf-add-action-btn {
+  align-self: flex-start;
+}
+
 .smart-folders-ignored-notice {
   margin-top: 24px;
   padding: 20px;

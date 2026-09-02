@@ -1,6 +1,6 @@
 import { App, ItemView, Modal, Notice, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import SmartFoldersPlugin from "../main";
-import { ContentPolicy, FolderPolicy, SmartFoldersSettings, SimpleRule, SingleCondition, isCompositeCondition, ConditionType, ConditionOperator, TagOperator } from "../types";
+import { ContentPolicy, FolderPolicy, SmartFoldersSettings, SimpleRule, SingleCondition, RuleAction, getRuleActions, isCompositeCondition, ConditionType, ConditionOperator, TagOperator } from "../types";
 import { FolderPickerModal } from "./folder-picker-modal";
 import { NotePickerModal } from "./note-picker-modal";
 import { nanoid } from "../utils/nanoid";
@@ -232,7 +232,7 @@ export class RuleBuilderView extends ItemView {
 
     // Auto-scan for highlight violations if there are highlight rules but no violations yet
     const localRules = this.plugin.settings.rules.filter((r) => r.folderPath === normalize(this.folder));
-    const hasHighlightRules = localRules.some(r => r.action.type === "highlight");
+    const hasHighlightRules = localRules.some((r) => getRuleActions(r).some((action) => action.type === "highlight"));
     const storedViolationsCount = (this.plugin.manager?.getStoredViolations(this.folder) ?? []).length;
     if (hasHighlightRules && storedViolationsCount === 0) {
       // Scan and wait for completion before rendering violations section
@@ -468,7 +468,7 @@ export class RuleBuilderView extends ItemView {
         // Determine if this exception is for a highlight rule or content policy
         // Check if any highlight rules in this folder would match this file
         const localRules = this.plugin.settings.rules.filter(
-          (r) => normalize(r.folderPath) === normalize(this.folder) && r.action.type === "highlight"
+          (r) => normalize(r.folderPath) === normalize(this.folder) && getRuleActions(r).some((action) => action.type === "highlight")
         );
         const hasHighlightRules = localRules.length > 0;
 
@@ -632,7 +632,7 @@ export class RuleBuilderView extends ItemView {
         folderPath: normalize(this.folder), // Where rule is displayed in UI
         scopeFolder: normalize(this.folder), // Where rule searches (defaults to same folder)
         condition: { type: "frontmatter", operator: "equals", field: "status", value: "" },
-        action: { type: "move-file", targetFolder: normalize(this.folder) },
+        actions: [{ type: "move-file", targetFolder: normalize(this.folder) }],
       };
       this.plugin.settings.rules.push(newRule);
       this.markDirty();
@@ -764,14 +764,7 @@ export class RuleBuilderView extends ItemView {
             folderPath: rule.folderPath,
             scopeFolder: rule.scopeFolder,
             condition: JSON.parse(JSON.stringify(rule.condition)), // Deep copy handles both single and composite
-            action: {
-              type: rule.action.type,
-              targetFolder: rule.action.targetFolder,
-              tag: rule.action.tag,
-              field: rule.action.field,
-              value: rule.action.value,
-              lazyMatch: rule.action.lazyMatch
-            }
+            actions: JSON.parse(JSON.stringify(getRuleActions(rule))),
           };
 
           // Find global index and insert after current rule
@@ -923,117 +916,62 @@ export class RuleBuilderView extends ItemView {
           };
         }
 
-        // Action section
-        const actionRow = ruleBody.createDiv({ cls: "sf-rule-row" });
-        actionRow.createSpan({ text: "Then:", cls: "sf-rule-label" });
-
-        const actionTypeSelect = actionRow.createEl("select", { cls: "sf-rule-select" });
-        actionTypeSelect.createEl("option", { text: "Move to folder", value: "move-file" });
-        actionTypeSelect.createEl("option", { text: "Quarantine", value: "quarantine" });
-        actionTypeSelect.createEl("option", { text: "Highlight", value: "highlight" });
-        actionTypeSelect.createEl("option", { text: "Add tag", value: "add-tag" });
-        actionTypeSelect.createEl("option", { text: "Remove tag", value: "remove-tag" });
-        actionTypeSelect.createEl("option", { text: "Set frontmatter", value: "set-frontmatter" });
-        actionTypeSelect.createEl("option", { text: "Remove frontmatter", value: "remove-frontmatter" });
-        actionTypeSelect.value = rule.action.type;
-        actionTypeSelect.onchange = () => {
-          rule.action.type = actionTypeSelect.value as any;
-          this.markDirty();
-          this.render(); // Re-render to show appropriate fields
-        };
-
-        // Dynamic action fields based on type
-        if (rule.action.type === "move-file") {
-          const targetInput = actionRow.createEl("input", {
-            type: "text",
-            placeholder: "target/folder/path",
-            cls: "sf-rule-input sf-rule-input-wide"
-          });
-          targetInput.value = rule.action.targetFolder || "";
-          targetInput.oninput = () => {
-            rule.action.targetFolder = targetInput.value;
-            this.markDirty();
-          };
-
-          const browseBtn = actionRow.createEl("button", { text: "Browse", cls: "sf-rule-browse-btn" });
-          browseBtn.onclick = () => {
-            new FolderPickerModal(this.app, (folder) => {
-              const folderPath = folder.path || "/";
-              targetInput.value = folderPath;
-              rule.action.targetFolder = folderPath;
-              this.markDirty();
-            }).open();
-          };
-
-          // Lazy match checkbox (only for move-file)
-          const lazyMatchRow = ruleBody.createDiv({ cls: "sf-rule-row sf-rule-checkbox-row" });
-
-          const lazyCheckbox = lazyMatchRow.createEl("input", {
-            type: "checkbox",
-            cls: "sf-rule-checkbox"
-          });
-          lazyCheckbox.checked = rule.action.lazyMatch ?? false;
-          lazyCheckbox.onchange = () => {
-            rule.action.lazyMatch = lazyCheckbox.checked;
-            this.markDirty();
-          };
-
-          const lazyLabel = lazyMatchRow.createEl("label", {
-            text: "Skip if already in folder or subfolders",
-            cls: "sf-rule-checkbox-label"
-          });
-          lazyLabel.onclick = () => {
-            lazyCheckbox.checked = !lazyCheckbox.checked;
-            rule.action.lazyMatch = lazyCheckbox.checked;
-            this.markDirty();
-          };
-        } else if (rule.action.type === "add-tag" || rule.action.type === "remove-tag") {
-          const tagInput = actionRow.createEl("input", {
-            type: "text",
-            placeholder: "tag (with or without #)",
-            cls: "sf-rule-input"
-          });
-          tagInput.value = rule.action.tag || "";
-          tagInput.oninput = () => {
-            rule.action.tag = tagInput.value;
-            this.markDirty();
-          };
-        } else if (rule.action.type === "set-frontmatter") {
-          const fieldInput = actionRow.createEl("input", {
-            type: "text",
-            placeholder: "field name",
-            cls: "sf-rule-input"
-          });
-          fieldInput.value = rule.action.field || "";
-          fieldInput.oninput = () => {
-            rule.action.field = fieldInput.value;
-            this.markDirty();
-          };
-
-          actionRow.createSpan({ text: "=", cls: "sf-rule-operator" });
-
-          const valueInput = actionRow.createEl("input", {
-            type: "text",
-            placeholder: "value",
-            cls: "sf-rule-input"
-          });
-          valueInput.value = rule.action.value || "";
-          valueInput.oninput = () => {
-            rule.action.value = valueInput.value;
-            this.markDirty();
-          };
-        } else if (rule.action.type === "remove-frontmatter") {
-          const fieldInput = actionRow.createEl("input", {
-            type: "text",
-            placeholder: "field name",
-            cls: "sf-rule-input"
-          });
-          fieldInput.value = rule.action.field || "";
-          fieldInput.oninput = () => {
-            rule.action.field = fieldInput.value;
-            this.markDirty();
-          };
+        // Ordered action section
+        if (!rule.actions?.length) {
+          rule.actions = getRuleActions(rule);
         }
+        const actions = rule.actions;
+        const actionSection = ruleBody.createDiv({ cls: "sf-actions-section" });
+        actionSection.createSpan({ text: "Then:", cls: "sf-rule-label" });
+
+        actions.forEach((action, actionIndex) => {
+          const actionContainer = actionSection.createDiv({ cls: "sf-action-container" });
+          const actionRow = actionContainer.createDiv({ cls: "sf-rule-row sf-action-row" });
+          actionRow.createSpan({ text: `${actionIndex + 1}.`, cls: "sf-action-number" });
+          this.renderActionInputs(actionContainer, actionRow, action);
+
+          const controls = actionRow.createDiv({ cls: "sf-action-controls" });
+          const upActionBtn = controls.createEl("button", { text: "↑", attr: { title: "Move action up" } });
+          upActionBtn.disabled = actionIndex === 0;
+          upActionBtn.onclick = () => {
+            if (actionIndex === 0) return;
+            [actions[actionIndex - 1], actions[actionIndex]] = [actions[actionIndex], actions[actionIndex - 1]];
+            this.markDirty();
+            this.render();
+          };
+
+          const downActionBtn = controls.createEl("button", { text: "↓", attr: { title: "Move action down" } });
+          downActionBtn.disabled = actionIndex === actions.length - 1;
+          downActionBtn.onclick = () => {
+            if (actionIndex >= actions.length - 1) return;
+            [actions[actionIndex], actions[actionIndex + 1]] = [actions[actionIndex + 1], actions[actionIndex]];
+            this.markDirty();
+            this.render();
+          };
+
+          const duplicateActionBtn = controls.createEl("button", { text: "⎘", attr: { title: "Duplicate action" } });
+          duplicateActionBtn.onclick = () => {
+            actions.splice(actionIndex + 1, 0, JSON.parse(JSON.stringify(action)) as RuleAction);
+            this.markDirty();
+            this.render();
+          };
+
+          const removeActionBtn = controls.createEl("button", { text: "✕", attr: { title: "Remove action" } });
+          removeActionBtn.disabled = actions.length === 1;
+          removeActionBtn.onclick = () => {
+            if (actions.length === 1) return;
+            actions.splice(actionIndex, 1);
+            this.markDirty();
+            this.render();
+          };
+        });
+
+        const addActionBtn = actionSection.createEl("button", { text: "+ Add Action", cls: "sf-add-action-btn" });
+        addActionBtn.onclick = () => {
+          actions.push({ type: "add-tag", tag: "" });
+          this.markDirty();
+          this.render();
+        };
       });
     }
 
@@ -1312,6 +1250,106 @@ export class RuleBuilderView extends ItemView {
           this.markDirty();
         };
       }
+    }
+  }
+
+  private renderActionInputs(container: HTMLElement, row: HTMLElement, action: RuleAction) {
+    const actionTypeSelect = row.createEl("select", { cls: "sf-rule-select" });
+    actionTypeSelect.createEl("option", { text: "Move to folder", value: "move-file" });
+    actionTypeSelect.createEl("option", { text: "Quarantine", value: "quarantine" });
+    actionTypeSelect.createEl("option", { text: "Highlight", value: "highlight" });
+    actionTypeSelect.createEl("option", { text: "Add tag", value: "add-tag" });
+    actionTypeSelect.createEl("option", { text: "Remove tag", value: "remove-tag" });
+    actionTypeSelect.createEl("option", { text: "Set frontmatter", value: "set-frontmatter" });
+    actionTypeSelect.createEl("option", { text: "Remove frontmatter", value: "remove-frontmatter" });
+    actionTypeSelect.value = action.type;
+    actionTypeSelect.onchange = () => {
+      action.type = actionTypeSelect.value as RuleAction["type"];
+      this.markDirty();
+      this.render();
+    };
+
+    if (action.type === "move-file") {
+      const targetInput = row.createEl("input", {
+        type: "text",
+        placeholder: "target/folder/path",
+        cls: "sf-rule-input sf-rule-input-wide"
+      });
+      targetInput.value = action.targetFolder || "";
+      targetInput.oninput = () => {
+        action.targetFolder = targetInput.value;
+        this.markDirty();
+      };
+
+      const browseBtn = row.createEl("button", { text: "Browse", cls: "sf-rule-browse-btn" });
+      browseBtn.onclick = () => {
+        new FolderPickerModal(this.app, (folder) => {
+          action.targetFolder = folder.path || "/";
+          targetInput.value = action.targetFolder;
+          this.markDirty();
+        }).open();
+      };
+
+      const lazyMatchRow = container.createDiv({ cls: "sf-rule-row sf-rule-checkbox-row sf-action-option-row" });
+      const lazyCheckbox = lazyMatchRow.createEl("input", { type: "checkbox", cls: "sf-rule-checkbox" });
+      lazyCheckbox.checked = action.lazyMatch ?? false;
+      lazyCheckbox.onchange = () => {
+        action.lazyMatch = lazyCheckbox.checked;
+        this.markDirty();
+      };
+      const lazyLabel = lazyMatchRow.createEl("label", {
+        text: "Skip if already in folder or subfolders",
+        cls: "sf-rule-checkbox-label"
+      });
+      lazyLabel.onclick = () => {
+        lazyCheckbox.checked = !lazyCheckbox.checked;
+        action.lazyMatch = lazyCheckbox.checked;
+        this.markDirty();
+      };
+    } else if (action.type === "add-tag" || action.type === "remove-tag") {
+      const tagInput = row.createEl("input", {
+        type: "text",
+        placeholder: "tag (with or without #)",
+        cls: "sf-rule-input"
+      });
+      tagInput.value = action.tag || "";
+      tagInput.oninput = () => {
+        action.tag = tagInput.value;
+        this.markDirty();
+      };
+    } else if (action.type === "set-frontmatter") {
+      const fieldInput = row.createEl("input", {
+        type: "text",
+        placeholder: "field name",
+        cls: "sf-rule-input"
+      });
+      fieldInput.value = action.field || "";
+      fieldInput.oninput = () => {
+        action.field = fieldInput.value;
+        this.markDirty();
+      };
+      row.createSpan({ text: "=", cls: "sf-rule-operator" });
+      const valueInput = row.createEl("input", {
+        type: "text",
+        placeholder: "value",
+        cls: "sf-rule-input"
+      });
+      valueInput.value = action.value || "";
+      valueInput.oninput = () => {
+        action.value = valueInput.value;
+        this.markDirty();
+      };
+    } else if (action.type === "remove-frontmatter") {
+      const fieldInput = row.createEl("input", {
+        type: "text",
+        placeholder: "field name",
+        cls: "sf-rule-input"
+      });
+      fieldInput.value = action.field || "";
+      fieldInput.oninput = () => {
+        action.field = fieldInput.value;
+        this.markDirty();
+      };
     }
   }
 
@@ -1600,33 +1638,27 @@ function formatRuleAsSentence(rule: SimpleRule): string {
     }
   }
 
-  // Format action
-  let action = " Then: ";
-  switch (rule.action.type) {
-    case "move-file":
-      action += `Move to \`${rule.action.targetFolder || "folder"}\``;
-      break;
-    case "quarantine":
-      action += `Quarantine (move to configured quarantine path)`;
-      break;
-    case "highlight":
-      action += `Highlight as violation (no file modification)`;
-      break;
-    case "add-tag":
-      action += `Add tag \`${rule.action.tag || "tag"}\``;
-      break;
-    case "remove-tag":
-      action += `Remove tag \`${rule.action.tag || "tag"}\``;
-      break;
-    case "set-frontmatter":
-      action += `Set frontmatter \`${rule.action.field || "field"}\` = \`${rule.action.value || "value"}\``;
-      break;
-    case "remove-frontmatter":
-      action += `Remove frontmatter \`${rule.action.field || "field"}\``;
-      break;
-  }
+  const actionDescriptions = getRuleActions(rule).map(formatActionDescription);
+  return condition + ` Then: ${actionDescriptions.join(" → ") || "No action"}`;
+}
 
-  return condition + action;
+function formatActionDescription(action: RuleAction): string {
+  switch (action.type) {
+    case "move-file":
+      return `Move to \`${action.targetFolder || "folder"}\``;
+    case "quarantine":
+      return "Quarantine (move to configured quarantine path)";
+    case "highlight":
+      return "Highlight as violation (no file modification)";
+    case "add-tag":
+      return `Add tag \`${action.tag || "tag"}\``;
+    case "remove-tag":
+      return `Remove tag \`${action.tag || "tag"}\``;
+    case "set-frontmatter":
+      return `Set frontmatter \`${action.field || "field"}\` = \`${action.value || "value"}\``;
+    case "remove-frontmatter":
+      return `Remove frontmatter \`${action.field || "field"}\``;
+  }
 }
 
 async function confirmDeletion(app: App, itemName: string): Promise<boolean> {

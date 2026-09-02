@@ -1,7 +1,7 @@
 import { App, Plugin, PluginSettingTab, WorkspaceLeaf, TFolder, Setting, normalizePath } from "obsidian";
 import { SmartFoldersManager } from "./manager";
 import { RuleBuilderView, VIEW_TYPE_RULE_BUILDER } from "./ui/rule-builder-view";
-import { DEFAULT_SETTINGS, SmartFoldersSettings } from "./types";
+import { DEFAULT_SETTINGS, SmartFoldersSettings, normalizeRuleActions } from "./types";
 import { normalizeFolderPath } from "./utils/folder-path";
 
 export default class SmartFoldersPlugin extends Plugin {
@@ -43,10 +43,22 @@ export default class SmartFoldersPlugin extends Plugin {
   }
 
   private async loadSettings(): Promise<void> {
+    const loaded = await this.loadData();
     this.settings = {
       ...DEFAULT_SETTINGS,
-      ...(await this.loadData()),
+      ...loaded,
     };
+
+    let migratedLegacyActions = false;
+    this.settings.rules = this.settings.rules.map((rule) => {
+      const normalized = normalizeRuleActions(rule);
+      if (normalized !== rule) migratedLegacyActions = true;
+      return normalized;
+    });
+
+    if (migratedLegacyActions) {
+      await this.saveData(this.settings);
+    }
   }
 
   async saveSettings(): Promise<void> {

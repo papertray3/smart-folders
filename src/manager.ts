@@ -1,7 +1,8 @@
 import { normalizePath, Notice, Plugin, TAbstractFile, TFile, TFolder, Vault } from "obsidian";
 import { RuleEvaluator } from "./rule-evaluator";
-import { ContentPolicy, FolderPolicy, SimpleRule, Violation } from "./types";
+import { ContentPolicy, FolderPolicy, RuleAction, SimpleRule, Violation, getRuleActions } from "./types";
 import { AuditLogger } from "./audit-logger";
+import { runOrderedActions } from "./action-sequence";
 
 type SettingsProvider = () => {
   rules: SimpleRule[];
@@ -16,6 +17,17 @@ type SettingsProvider = () => {
   ignoredFolders: string[];
 };
 
+interface ActionExecutionContext {
+  file: TFile;
+  originalPath: string;
+  currentPath: string;
+}
+
+interface ActionExecutionResult {
+  context: ActionExecutionContext;
+  details: string;
+}
+
 export class SmartFoldersManager {
   private evaluator: RuleEvaluator;
   private auditLogger: AuditLogger;
@@ -23,6 +35,8 @@ export class SmartFoldersManager {
   private lastViolations = new Map<string, Violation[]>(); // folder path -> violations (policy + highlight)
   private lastPolicyType = new Map<string, ContentPolicy>(); // folder path -> last policy type
   private pendingCreates = new Map<string, number>(); // file path -> timestamp of create event
+  private activeActionFiles = new WeakSet<TFile>();
+  private recentlyCompletedActionFiles = new WeakMap<TFile, number>();
 
   constructor(private plugin: Plugin, private readonly settings: SettingsProvider) {
     this.evaluator = new RuleEvaluator(plugin.app.metadataCache);
@@ -51,6 +65,12 @@ export class SmartFoldersManager {
   }
 
   private processMaybe(file: TAbstractFile, trigger: string) {
+    if (file instanceof TFile) {
+      if (this.activeActionFiles.has(file)) return;
+      const completedAt = this.recentlyCompletedActionFiles.get(file);
+      if (completedAt && Date.now() - completedAt < 750) return;
+    }
+
     const debugMsg = (msg: string) => {
       this.auditLogger.log({
         timestamp: new Date().toISOString(),
@@ -139,6 +159,8 @@ export class SmartFoldersManager {
   }
 
   async processFile(file: TFile, _trigger: string): Promise<void> {
+    if (this.activeActionFiles.has(file)) return;
+
     const { rules, folderPolicies } = this.settings();
     if (!rules?.length) return;
 
@@ -153,77 +175,116 @@ export class SmartFoldersManager {
 
     const disabledInheritedRules = folderPolicy?.disabledInheritedRules ?? [];
 
-    const context = this.evaluator.buildContext(file);
+    const conditionContext = this.evaluator.buildContext(file);
     const applicable = rules.filter((r) => this.inScope(file.path, r.scopeFolder));
-    for (const rule of applicable) {
-      // Skip if this is an inherited rule that's been disabled for this folder
-      if (normalizePath(rule.scopeFolder) !== fileFolder && disabledInheritedRules.includes(rule.id)) {
-        continue;
+    let executionContext: ActionExecutionContext = {
+      file,
+      originalPath: file.path,
+      currentPath: file.path,
+    };
+
+    this.activeActionFiles.add(file);
+    try {
+      for (const rule of applicable) {
+        // Skip if this is an inherited rule that's been disabled for this folder
+        if (normalizePath(rule.scopeFolder) !== fileFolder && disabledInheritedRules.includes(rule.id)) {
+          continue;
+        }
+
+        if (!this.evaluator.matches(rule, conditionContext)) continue;
+
+        await this.auditLogger.log({
+          timestamp: new Date().toISOString(),
+          operation: "rule-match",
+          filePath: executionContext.currentPath,
+          ruleName: rule.name,
+          details: `Rule matched: ${rule.name}`,
+        });
+
+        const actions = getRuleActions(rule);
+        executionContext = await runOrderedActions(actions, executionContext, async (action, index, currentContext) => {
+          try {
+            const result = await this.executeAction(rule, action, currentContext);
+            await this.auditLogger.log({
+              timestamp: new Date().toISOString(),
+              operation: "rule-action",
+              filePath: result.context.currentPath,
+              ruleName: rule.name,
+              details: `Action ${index + 1}/${actions.length}: ${result.details}`,
+            });
+            return result.context;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            await this.auditLogger.log({
+              timestamp: new Date().toISOString(),
+              operation: "rule-action",
+              filePath: currentContext.currentPath,
+              ruleName: rule.name,
+              details: `Action ${index + 1}/${actions.length} failed: ${message}`,
+            });
+            new Notice(`Smart Folders: "${rule.name}" stopped at action ${index + 1}: ${message}`);
+            throw error;
+          }
+        });
+
+        // Execute all matching rules (not stop on first).
+        // Conditions retain the pre-action snapshot for this processing pass.
       }
-
-      if (!this.evaluator.matches(rule, context)) continue;
-
-      await this.auditLogger.log({
-        timestamp: new Date().toISOString(),
-        operation: "rule-match",
-        filePath: file.path,
-        ruleName: rule.name,
-        details: `Rule matched: ${rule.name}`,
-      });
-
-      const actionDetails = await this.executeAction(rule, file);
-
-      await this.auditLogger.log({
-        timestamp: new Date().toISOString(),
-        operation: "rule-action",
-        filePath: file.path,
-        ruleName: rule.name,
-        details: actionDetails,
-      });
-
-      // Execute all matching rules (not stop on first)
-      // break;
+    } finally {
+      this.activeActionFiles.delete(file);
+      this.recentlyCompletedActionFiles.set(file, Date.now());
     }
   }
 
-  private async executeAction(rule: SimpleRule, file: TFile): Promise<string> {
-    switch (rule.action.type) {
+  private async executeAction(
+    rule: SimpleRule,
+    action: RuleAction,
+    context: ActionExecutionContext,
+  ): Promise<ActionExecutionResult> {
+    const file = context.file;
+    switch (action.type) {
       case "move-file":
-        await this.executeMove(rule, file);
-        return `Moved to ${rule.action.targetFolder}`;
+        await this.executeMove(rule, action, file);
+        return {
+          context: { ...context, file, currentPath: file.path },
+          details: `Moved to ${action.targetFolder}`,
+        };
 
       case "quarantine":
         const quarantinePath = await this.executeQuarantine(file);
-        return `Quarantined to ${quarantinePath}`;
+        return {
+          context: { ...context, file, currentPath: file.path },
+          details: `Quarantined to ${quarantinePath}`,
+        };
 
       case "highlight":
         await this.executeHighlight(rule, file);
-        return `Highlighted: ${rule.name}`;
+        return { context, details: `Highlighted: ${rule.name}` };
 
       case "add-tag":
-        await this.executeAddTag(rule, file);
-        return `Added tag ${rule.action.tag}`;
+        await this.executeAddTag(action, file);
+        return { context, details: `Added tag ${action.tag}` };
 
       case "remove-tag":
-        await this.executeRemoveTag(rule, file);
-        return `Removed tag ${rule.action.tag}`;
+        await this.executeRemoveTag(action, file);
+        return { context, details: `Removed tag ${action.tag}` };
 
       case "set-frontmatter":
-        await this.executeSetFrontmatter(rule, file);
-        return `Set frontmatter ${rule.action.field} = ${rule.action.value}`;
+        await this.executeSetFrontmatter(action, file);
+        return { context, details: `Set frontmatter ${action.field} = ${action.value}` };
 
       case "remove-frontmatter":
-        await this.executeRemoveFrontmatter(rule, file);
-        return `Removed frontmatter ${rule.action.field}`;
+        await this.executeRemoveFrontmatter(action, file);
+        return { context, details: `Removed frontmatter ${action.field}` };
 
       default:
-        return `Unknown action type: ${rule.action.type}`;
+        throw new Error(`Unknown action type: ${(action as RuleAction).type}`);
     }
   }
 
-  private async executeMove(rule: SimpleRule, file: TFile): Promise<void> {
-    if (!rule.action.targetFolder) return;
-    let targetFolder = rule.action.targetFolder.replace(/\\/g, "/");
+  private async executeMove(rule: SimpleRule, action: RuleAction, file: TFile): Promise<void> {
+    if (!action.targetFolder) return;
+    let targetFolder = action.targetFolder.replace(/\\/g, "/");
 
     // Resolve relative paths (starting with ./) relative to the rule's scope folder
     if (targetFolder.startsWith("./")) {
@@ -235,7 +296,7 @@ export class SmartFoldersManager {
     targetFolder = normalizePath(targetFolder);
 
     // Lazy match: skip if file is already in target folder or any subfolder
-    if (rule.action.lazyMatch) {
+    if (action.lazyMatch) {
       const currentFolder = normalizePath(file.parent?.path ?? "/");
       if (currentFolder === targetFolder || currentFolder.startsWith(targetFolder + "/")) {
         return; // Already in target hierarchy, skip move
@@ -259,9 +320,9 @@ export class SmartFoldersManager {
     await vault.rename(file, targetPath);
   }
 
-  private async executeAddTag(rule: SimpleRule, file: TFile): Promise<void> {
-    if (!rule.action.tag) return;
-    const tag = rule.action.tag.startsWith('#') ? rule.action.tag.slice(1) : rule.action.tag;
+  private async executeAddTag(action: RuleAction, file: TFile): Promise<void> {
+    if (!action.tag) return;
+    const tag = action.tag.startsWith('#') ? action.tag.slice(1) : action.tag;
 
     await this.plugin.app.fileManager.processFrontMatter(file, (fm) => {
       if (!fm.tags) {
@@ -275,9 +336,9 @@ export class SmartFoldersManager {
     });
   }
 
-  private async executeRemoveTag(rule: SimpleRule, file: TFile): Promise<void> {
-    if (!rule.action.tag) return;
-    const tag = rule.action.tag.startsWith('#') ? rule.action.tag.slice(1) : rule.action.tag;
+  private async executeRemoveTag(action: RuleAction, file: TFile): Promise<void> {
+    if (!action.tag) return;
+    const tag = action.tag.startsWith('#') ? action.tag.slice(1) : action.tag;
 
     await this.plugin.app.fileManager.processFrontMatter(file, (fm) => {
       if (Array.isArray(fm.tags)) {
@@ -291,19 +352,19 @@ export class SmartFoldersManager {
     });
   }
 
-  private async executeSetFrontmatter(rule: SimpleRule, file: TFile): Promise<void> {
-    if (!rule.action.field) return;
-    const field = rule.action.field;
-    const value = rule.action.value || "";
+  private async executeSetFrontmatter(action: RuleAction, file: TFile): Promise<void> {
+    if (!action.field) return;
+    const field = action.field;
+    const value = action.value || "";
 
     await this.plugin.app.fileManager.processFrontMatter(file, (fm) => {
       fm[field] = value;
     });
   }
 
-  private async executeRemoveFrontmatter(rule: SimpleRule, file: TFile): Promise<void> {
-    if (!rule.action.field) return;
-    const field = rule.action.field;
+  private async executeRemoveFrontmatter(action: RuleAction, file: TFile): Promise<void> {
+    if (!action.field) return;
+    const field = action.field;
 
     await this.plugin.app.fileManager.processFrontMatter(file, (fm) => {
       delete fm[field];
