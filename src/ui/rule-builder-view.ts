@@ -4,6 +4,7 @@ import { ContentPolicy, FolderPolicy, SmartFoldersSettings, SimpleRule, SingleCo
 import { FolderPickerModal } from "./folder-picker-modal";
 import { NotePickerModal } from "./note-picker-modal";
 import { nanoid } from "../utils/nanoid";
+import { normalizeFolderPath as normalize } from "../utils/folder-path";
 
 export const VIEW_TYPE_RULE_BUILDER = "smart-folders-rule-builder";
 
@@ -299,7 +300,7 @@ export class RuleBuilderView extends ItemView {
     });
     const hubPickBtn = hubControls.createEl("button", { text: savedPolicy.hubPage ? "Change" : "Choose note" });
     hubPickBtn.onclick = () => {
-      new NotePickerModal(this.app, async (file) => {
+      new NotePickerModal(this.app, this.folder, async (file) => {
         savedPolicy.hubPage = file.path;
         setPolicy(this.plugin.settings, this.folder, savedPolicy);
         await this.plugin.saveSettings();
@@ -310,29 +311,6 @@ export class RuleBuilderView extends ItemView {
       const hubClearBtn = hubControls.createEl("button", { text: "Clear" });
       hubClearBtn.onclick = async () => {
         savedPolicy.hubPage = undefined;
-        savedPolicy.promoted = false; // promoted requires a hubPage
-        setPolicy(this.plugin.settings, this.folder, savedPolicy);
-        await this.plugin.saveSettings();
-        this.render();
-      };
-    }
-
-    // Promoted: whether this folder's hub page shows up as a card on the Hubpage
-    const promotedRow = policySection.createDiv({ cls: "setting-item" });
-    const promotedLabelEl = promotedRow.createEl("div", { text: "Promoted (shown on Hubpage)" });
-    const canPromote = !!savedPolicy.hubPage;
-    if (!canPromote) {
-      promotedLabelEl.createSpan({ text: " (set a hub page first)", cls: "sf-inherited-label" });
-    }
-    const isPromoted = !!savedPolicy.promoted && canPromote;
-    const promotedToggle = promotedRow.createDiv({ cls: "smart-folders-toggle-switch" });
-    promotedToggle.createDiv({ cls: isPromoted ? "slider slider-on" : "slider" });
-    if (!canPromote) {
-      promotedToggle.style.cursor = "not-allowed";
-      promotedToggle.style.opacity = "0.5";
-    } else {
-      promotedToggle.onclick = async () => {
-        savedPolicy.promoted = !savedPolicy.promoted;
         setPolicy(this.plugin.settings, this.folder, savedPolicy);
         await this.plugin.saveSettings();
         this.render();
@@ -1492,12 +1470,6 @@ function renderBreadcrumb(container: HTMLElement, folder: string, onNavigate: (f
       onNavigate(seg);
     };
   });
-}
-
-function normalize(folder: string): string {
-  if (!folder || folder === "/") return "/";
-  // Replace backslashes, remove trailing slash, remove leading slash
-  return folder.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
 }
 
 function trimPath(fullPath: string, scopeFolder: string, plugin: SmartFoldersPlugin): string {

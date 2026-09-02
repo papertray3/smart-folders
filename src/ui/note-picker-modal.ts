@@ -1,13 +1,19 @@
 import { App, FuzzySuggestModal, TFile } from "obsidian";
+import { normalizeFolderPath } from "../utils/folder-path";
 
 export class NotePickerModal extends FuzzySuggestModal<TFile> {
-  constructor(app: App, private onChoose: (file: TFile) => void) {
+  private normalizedFolder: string;
+
+  constructor(app: App, folderPath: string, private onChoose: (file: TFile) => void) {
     super(app);
-    this.setPlaceholder("Select a note to use as the hub page");
+    this.normalizedFolder = normalizeFolderPath(folderPath);
+    this.setPlaceholder(`Select a note in ${this.normalizedFolder}`);
   }
 
   getItems(): TFile[] {
-    return this.app.vault.getMarkdownFiles();
+    return this.app.vault
+      .getMarkdownFiles()
+      .filter((file) => normalizeFolderPath(file.parent?.path ?? "/") === this.normalizedFolder);
   }
 
   getItemText(item: TFile): string {

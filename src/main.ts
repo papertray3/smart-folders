@@ -2,6 +2,7 @@ import { App, Plugin, PluginSettingTab, WorkspaceLeaf, TFolder, Setting, normali
 import { SmartFoldersManager } from "./manager";
 import { RuleBuilderView, VIEW_TYPE_RULE_BUILDER } from "./ui/rule-builder-view";
 import { DEFAULT_SETTINGS, SmartFoldersSettings } from "./types";
+import { normalizeFolderPath } from "./utils/folder-path";
 
 export default class SmartFoldersPlugin extends Plugin {
   settings: SmartFoldersSettings = DEFAULT_SETTINGS;
@@ -55,15 +56,18 @@ export default class SmartFoldersPlugin extends Plugin {
 
   /**
    * Public API for other plugins/dataviewjs to read the Hubpage's card list,
-   * e.g. app.plugins.plugins["smart-folders"].getPromotedHubs().
-   * Only returns folders with promoted=true AND a hubPage set - promotion
-   * without a hub page shouldn't be possible via the UI, but this guards
-   * against stale/manually-edited settings too.
+   * e.g. app.plugins.plugins["smart-folders"].getHubPages(). A folder counts
+   * as promoted simply by having a hubPage set - no separate toggle.
    */
-  getPromotedHubs(): { folderPath: string; hubPage: string }[] {
+  getHubPages(): { folderPath: string; hubPage: string }[] {
     return Object.entries(this.settings.folderPolicies)
-      .filter(([, policy]) => policy.promoted && policy.hubPage)
+      .filter(([, policy]) => policy.hubPage)
       .map(([folderPath, policy]) => ({ folderPath, hubPage: policy.hubPage as string }));
+  }
+
+  /** Single-folder lookup, e.g. for the agent-client opened-note handshake. */
+  getHubPageForFolder(folderPath: string): string | undefined {
+    return this.settings.folderPolicies[normalizeFolderPath(folderPath)]?.hubPage;
   }
 
   private async openViewForCurrentFolder() {

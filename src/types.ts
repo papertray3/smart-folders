@@ -80,8 +80,7 @@ export interface FolderPolicy {
   exceptions?: string[]; // full paths allowed even if policy would block
   enabled?: boolean; // per-folder enable/disable
   disabledInheritedRules?: string[]; // rule IDs that are disabled for this folder
-  hubPage?: string; // vault path of the note representing this folder on the Hubpage
-  promoted?: boolean; // whether this folder's hubPage appears on the Hubpage; requires hubPage to be set
+  hubPage?: string; // vault path of the note representing this folder on the Hubpage; setting it is what promotes the folder
 }
 
 export const DEFAULT_SETTINGS: SmartFoldersSettings = {
