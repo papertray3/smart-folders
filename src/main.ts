@@ -3,6 +3,8 @@ import { SmartFoldersManager } from "./manager";
 import { RuleBuilderView, VIEW_TYPE_RULE_BUILDER } from "./ui/rule-builder-view";
 import { DEFAULT_SETTINGS, SmartFoldersSettings, normalizeRuleActions } from "./types";
 import { normalizeFolderPath } from "./utils/folder-path";
+import { ContextBoundary, ContextBoundaryConflict, getContextBoundaries, getContextBoundaryConflict, getDescendantBoundaries, resolveContextBoundary } from "./context-boundary";
+import { findSmartFolderRoots, isIgnoredPath } from "./smart-root";
 
 export default class SmartFoldersPlugin extends Plugin {
   settings: SmartFoldersSettings = DEFAULT_SETTINGS;
@@ -14,7 +16,7 @@ export default class SmartFoldersPlugin extends Plugin {
     this.manager = new SmartFoldersManager(this, () => this.settings);
     await this.manager.start();
 
-    this.addRibbonIcon("folder", "Smart Folders (root)", () => this.openViewForFolder("/"));
+    this.addRibbonIcon("folder", "Open Smart Folders root", () => this.openRootView());
 
     this.addCommand({
       id: "smart-folders-run-on-active-file",
@@ -80,6 +82,47 @@ export default class SmartFoldersPlugin extends Plugin {
   /** Single-folder lookup, e.g. for the agent-client opened-note handshake. */
   getHubPageForFolder(folderPath: string): string | undefined {
     return this.settings.folderPolicies[normalizeFolderPath(folderPath)]?.hubPage;
+  }
+
+  /** All configured, non-nested workspace context boundaries. */
+  getContextBoundaries(): ContextBoundary[] {
+    return getContextBoundaries(this.settings.folderPolicies);
+  }
+
+  /** Resolve a vault-relative file or folder path to its owning context boundary. */
+  resolveContextBoundary(path: string): ContextBoundary | undefined {
+    return resolveContextBoundary(path, this.settings.folderPolicies);
+  }
+
+  /** Explain why a folder cannot become a boundary without creating nesting. */
+  getContextBoundaryConflict(folderPath: string): ContextBoundaryConflict | undefined {
+    return getContextBoundaryConflict(folderPath, this.settings.folderPolicies);
+  }
+
+  /** All context boundaries nested beneath the given folder, e.g. to warn before they'd be displaced. */
+  getDescendantContextBoundaries(folderPath: string): ContextBoundary[] {
+    return getDescendantBoundaries(folderPath, this.settings.folderPolicies);
+  }
+
+  /** Top-level configured folders that act as Smart Folders entry points. */
+  getSmartFolderRoots(): string[] {
+    const configuredPaths = [
+      ...Object.keys(this.settings.folderPolicies),
+      ...this.settings.rules.map((rule) => rule.folderPath),
+    ].filter((path) => this.app.vault.getAbstractFileByPath(normalizeFolderPath(path)) instanceof TFolder);
+
+    const configuredRoots = findSmartFolderRoots(configuredPaths, this.settings.ignoredFolders);
+    if (configuredRoots.length > 0) return configuredRoots;
+
+    return this.app.vault.getRoot().children
+      .filter((child): child is TFolder => child instanceof TFolder)
+      .map((folder) => folder.path)
+      .filter((path) => !isIgnoredPath(path, this.settings.ignoredFolders))
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  async openRootView(): Promise<void> {
+    await this.openViewForFolder(this.getSmartFolderRoots()[0] ?? "/");
   }
 
   private async openViewForCurrentFolder() {
@@ -155,7 +198,7 @@ class MinimalSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Open rule builder")
       .setDesc("Use the command palette: Open Smart Folders view for current folder")
-      .addButton((btn) => btn.setButtonText("Open root").onClick(() => this.pluginInstance.openViewForFolder("/")));
+      .addButton((btn) => btn.setButtonText("Open root").onClick(() => this.pluginInstance.openRootView()));
 
     new Setting(containerEl)
       .setName("Inherit content policy")

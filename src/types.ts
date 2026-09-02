@@ -99,6 +99,7 @@ export interface FolderPolicy {
   enabled?: boolean; // per-folder enable/disable
   disabledInheritedRules?: string[]; // rule IDs that are disabled for this folder
   hubPage?: string; // vault path of the note representing this folder on the Hubpage; setting it is what promotes the folder
+  contextBoundary?: boolean; // this folder and descendants form one explicit workspace context; boundaries cannot nest
 }
 
 export const DEFAULT_SETTINGS: SmartFoldersSettings = {

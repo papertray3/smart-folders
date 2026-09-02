@@ -182,9 +182,83 @@ If your plugin does not need CSS, delete this file.
   font-style: italic;
 }
 
+.smart-folders-policy {
+  margin-top: 16px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+
+.sf-folder-config-header {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sf-folder-config-header h3,
+.sf-folder-config-header p {
+  margin: 0;
+}
+
+.sf-folder-config-header h3 {
+  font-size: 16px;
+}
+
+.sf-folder-config-header p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.sf-folder-config-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.4fr);
+  align-items: center;
+  gap: 20px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.sf-folder-config-row:first-child {
+  border-top: 0;
+}
+
+.sf-folder-config-info {
+  min-width: 0;
+}
+
+.sf-folder-config-name {
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium);
+  line-height: var(--line-height-tight);
+}
+
+.sf-folder-config-description {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: var(--line-height-normal);
+}
+
+.sf-folder-config-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sf-folder-config-list select,
+.sf-folder-config-list input[type="text"] {
+  width: min(100%, 360px);
+}
+
 .sf-hub-page-controls {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -647,6 +721,83 @@ If your plugin does not need CSS, delete this file.
 
 .sf-add-action-btn {
   align-self: flex-start;
+}
+
+.sf-context-boundary-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sf-context-boundary-info {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  color: var(--text-muted);
+}
+
+.sf-context-boundary-info:hover,
+.sf-context-boundary-info:focus-visible {
+  color: var(--text-accent);
+}
+
+.sf-context-boundary-toggle {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.sf-context-boundary-toggle:disabled {
+  cursor: not-allowed;
+}
+
+.sf-context-boundary-inline {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding-top: 10px;
+  padding-left: 20px;
+  border-top: 1px dashed var(--background-modifier-border);
+}
+
+.sf-context-boundary-inline-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sf-context-boundary-inline-name {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sf-context-boundary-inline-desc {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: var(--line-height-normal);
+}
+
+.sf-context-boundary-link {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--text-accent);
+  font-family: var(--font-monospace);
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .sf-folder-config-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .sf-folder-config-control,
+  .sf-hub-page-controls {
+    justify-content: flex-start;
+  }
 }
 
 .smart-folders-ignored-notice {
