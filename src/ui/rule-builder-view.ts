@@ -1,7 +1,8 @@
 import { App, ItemView, Modal, Notice, TFile, TFolder, WorkspaceLeaf } from "obsidian";
 import SmartFoldersPlugin from "../main";
-import { ContentPolicy, SmartFoldersSettings, SimpleRule, SingleCondition, isCompositeCondition, ConditionType, ConditionOperator, TagOperator } from "../types";
+import { ContentPolicy, FolderPolicy, SmartFoldersSettings, SimpleRule, SingleCondition, isCompositeCondition, ConditionType, ConditionOperator, TagOperator } from "../types";
 import { FolderPickerModal } from "./folder-picker-modal";
+import { NotePickerModal } from "./note-picker-modal";
 import { nanoid } from "../utils/nanoid";
 
 export const VIEW_TYPE_RULE_BUILDER = "smart-folders-rule-builder";
@@ -287,6 +288,56 @@ export class RuleBuilderView extends ItemView {
         qInput.blur();
       }
     };
+
+    // Hub page: which note represents this folder on the Hubpage board
+    const hubRow = policySection.createDiv({ cls: "setting-item" });
+    hubRow.createEl("div", { text: "Hub page" });
+    const hubControls = hubRow.createDiv({ cls: "sf-hub-page-controls" });
+    hubControls.createSpan({
+      text: savedPolicy.hubPage ?? "Not set",
+      cls: "sf-hub-page-value",
+    });
+    const hubPickBtn = hubControls.createEl("button", { text: savedPolicy.hubPage ? "Change" : "Choose note" });
+    hubPickBtn.onclick = () => {
+      new NotePickerModal(this.app, async (file) => {
+        savedPolicy.hubPage = file.path;
+        setPolicy(this.plugin.settings, this.folder, savedPolicy);
+        await this.plugin.saveSettings();
+        this.render();
+      }).open();
+    };
+    if (savedPolicy.hubPage) {
+      const hubClearBtn = hubControls.createEl("button", { text: "Clear" });
+      hubClearBtn.onclick = async () => {
+        savedPolicy.hubPage = undefined;
+        savedPolicy.promoted = false; // promoted requires a hubPage
+        setPolicy(this.plugin.settings, this.folder, savedPolicy);
+        await this.plugin.saveSettings();
+        this.render();
+      };
+    }
+
+    // Promoted: whether this folder's hub page shows up as a card on the Hubpage
+    const promotedRow = policySection.createDiv({ cls: "setting-item" });
+    const promotedLabelEl = promotedRow.createEl("div", { text: "Promoted (shown on Hubpage)" });
+    const canPromote = !!savedPolicy.hubPage;
+    if (!canPromote) {
+      promotedLabelEl.createSpan({ text: " (set a hub page first)", cls: "sf-inherited-label" });
+    }
+    const isPromoted = !!savedPolicy.promoted && canPromote;
+    const promotedToggle = promotedRow.createDiv({ cls: "smart-folders-toggle-switch" });
+    promotedToggle.createDiv({ cls: isPromoted ? "slider slider-on" : "slider" });
+    if (!canPromote) {
+      promotedToggle.style.cursor = "not-allowed";
+      promotedToggle.style.opacity = "0.5";
+    } else {
+      promotedToggle.onclick = async () => {
+        savedPolicy.promoted = !savedPolicy.promoted;
+        setPolicy(this.plugin.settings, this.folder, savedPolicy);
+        await this.plugin.saveSettings();
+        this.render();
+      };
+    }
 
     const storedViolations = this.plugin.manager?.getStoredViolations(this.folder) ?? [];
 
@@ -1478,7 +1529,7 @@ function getOrCreatePolicy(settings: SmartFoldersSettings, folder: string) {
   return settings.folderPolicies[path];
 }
 
-function setPolicy(settings: SmartFoldersSettings, folder: string, policy: { contentPolicy: ContentPolicy; quarantinePath?: string; enabled?: boolean; exceptions?: string[] }) {
+function setPolicy(settings: SmartFoldersSettings, folder: string, policy: FolderPolicy) {
   settings.folderPolicies[normalize(folder)] = policy;
 }
 

@@ -53,6 +53,19 @@ export default class SmartFoldersPlugin extends Plugin {
     await this.manager?.restart();
   }
 
+  /**
+   * Public API for other plugins/dataviewjs to read the Hubpage's card list,
+   * e.g. app.plugins.plugins["smart-folders"].getPromotedHubs().
+   * Only returns folders with promoted=true AND a hubPage set - promotion
+   * without a hub page shouldn't be possible via the UI, but this guards
+   * against stale/manually-edited settings too.
+   */
+  getPromotedHubs(): { folderPath: string; hubPage: string }[] {
+    return Object.entries(this.settings.folderPolicies)
+      .filter(([, policy]) => policy.promoted && policy.hubPage)
+      .map(([folderPath, policy]) => ({ folderPath, hubPage: policy.hubPage as string }));
+  }
+
   private async openViewForCurrentFolder() {
     const folder = await this.getCurrentFolder();
     await this.openViewForFolder(folder);
