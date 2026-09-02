@@ -1,8 +1,9 @@
 import { App, ItemView, Modal, Notice, TFile, TFolder, WorkspaceLeaf, setIcon } from "obsidian";
 import SmartFoldersPlugin from "../main";
-import { ContentPolicy, FolderPolicy, SmartFoldersSettings, SimpleRule, SingleCondition, RuleAction, getRuleActions, isCompositeCondition, ConditionType, ConditionOperator, TagOperator } from "../types";
+import { ContentPolicy, FolderPolicy, SmartFoldersSettings, SimpleRule, SingleCondition, RuleAction, getRuleActions, isCompositeCondition, ConditionType, ConditionOperator, TagOperator, BoundaryAction, BoundaryActionType } from "../types";
 import { FolderPickerModal } from "./folder-picker-modal";
 import { NotePickerModal } from "./note-picker-modal";
+import { CommandPickerModal } from "./command-picker-modal";
 import { nanoid } from "../utils/nanoid";
 import { normalizeFolderPath as normalize } from "../utils/folder-path";
 
@@ -384,6 +385,10 @@ export class RuleBuilderView extends ItemView {
       await this.plugin.saveSettings();
       this.render();
     };
+
+    if (savedPolicy.contextBoundary) {
+      this.renderBoundaryActionsSection(containerEl, savedPolicy);
+    }
 
     const storedViolations = this.plugin.manager?.getStoredViolations(this.folder) ?? [];
 
@@ -1446,6 +1451,193 @@ export class RuleBuilderView extends ItemView {
         this.markDirty();
       };
     }
+  }
+
+  // Boundary Actions: On Enter/On Exit hooks for a context boundary. Separate
+  // from rule actions above - a different, smaller vocabulary (see
+  // 00_Admin/08-context-boundary-events.md), and auto-saves immediately like
+  // the rest of the folder-configuration card rather than using the rules
+  // list's dirty-tracking/Save-button pattern.
+  private renderBoundaryActionsSection(containerEl: HTMLElement, savedPolicy: FolderPolicy) {
+    const section = containerEl.createDiv({ cls: "sf-rules-section sf-boundary-actions-section" });
+    const header = section.createDiv({ cls: "sf-rules-header" });
+    header.createEl("h3", { text: "Boundary Actions" });
+
+    this.renderBoundaryActionList(section, savedPolicy, "onEnterActions", "On Enter", false);
+    this.renderBoundaryActionList(section, savedPolicy, "onExitActions", "On Exit", true);
+  }
+
+  private renderBoundaryActionList(
+    container: HTMLElement,
+    savedPolicy: FolderPolicy,
+    key: "onEnterActions" | "onExitActions",
+    label: string,
+    collapsedWhenEmpty: boolean,
+  ) {
+    if (!savedPolicy[key]) savedPolicy[key] = [];
+    const actions = savedPolicy[key] as BoundaryAction[];
+
+    const wrapper = container.createDiv({ cls: "sf-boundary-action-list" });
+
+    if (collapsedWhenEmpty && actions.length === 0) {
+      const addBtn = wrapper.createEl("button", {
+        text: `+ Add ${label.toLowerCase()} action (optional)`,
+        cls: "sf-add-action-btn",
+      });
+      addBtn.onclick = () => {
+        actions.push({ type: "show-notice", message: "" });
+        this.saveBoundaryActions(savedPolicy);
+      };
+      return;
+    }
+
+    wrapper.createEl("h4", { text: label, cls: "sf-boundary-action-list-title" });
+
+    if (actions.length === 0) {
+      wrapper.createDiv({
+        text: "No actions configured - this boundary just tracks where you are.",
+        cls: "sf-folder-config-description",
+      });
+    }
+
+    actions.forEach((action, index) => {
+      const row = wrapper.createDiv({ cls: "sf-rule-row sf-action-row" });
+      row.createSpan({ text: `${index + 1}.`, cls: "sf-action-number" });
+      this.renderBoundaryActionInputs(row, action, savedPolicy);
+
+      const controls = row.createDiv({ cls: "sf-action-controls" });
+      const upBtn = controls.createEl("button", { text: "↑", attr: { title: "Move action up" } });
+      upBtn.disabled = index === 0;
+      upBtn.onclick = () => {
+        [actions[index - 1], actions[index]] = [actions[index], actions[index - 1]];
+        this.saveBoundaryActions(savedPolicy);
+      };
+
+      const downBtn = controls.createEl("button", { text: "↓", attr: { title: "Move action down" } });
+      downBtn.disabled = index === actions.length - 1;
+      downBtn.onclick = () => {
+        [actions[index], actions[index + 1]] = [actions[index + 1], actions[index]];
+        this.saveBoundaryActions(savedPolicy);
+      };
+
+      const removeBtn = controls.createEl("button", { text: "✕", attr: { title: "Remove action" } });
+      removeBtn.onclick = () => {
+        actions.splice(index, 1);
+        this.saveBoundaryActions(savedPolicy);
+      };
+    });
+
+    const addBtn = wrapper.createEl("button", { text: "+ Add action", cls: "sf-add-action-btn" });
+    addBtn.onclick = () => {
+      actions.push({ type: "show-notice", message: "" });
+      this.saveBoundaryActions(savedPolicy);
+    };
+  }
+
+  private renderBoundaryActionInputs(row: HTMLElement, action: BoundaryAction, savedPolicy: FolderPolicy) {
+    const typeSelect = row.createEl("select", { cls: "sf-rule-select" });
+    const options: { value: BoundaryActionType; text: string }[] = [
+      { value: "open-note", text: "Open a note" },
+      { value: "run-command", text: "Run an Obsidian command" },
+      { value: "show-notice", text: "Show a notice" },
+      { value: "set-frontmatter", text: "Set frontmatter" },
+      { value: "append-line", text: "Append a line to a note" },
+      { value: "run-customjs", text: "Run a CustomJS function" },
+      { value: "delay", text: "Delay" },
+    ];
+    options.forEach((opt) => typeSelect.createEl("option", { value: opt.value, text: opt.text }));
+    typeSelect.value = action.type;
+    typeSelect.onchange = () => {
+      action.type = typeSelect.value as BoundaryActionType;
+      this.saveBoundaryActions(savedPolicy);
+    };
+
+    const fields = row.createDiv({ cls: "sf-boundary-action-fields" });
+
+    if (action.type === "open-note" || action.type === "set-frontmatter" || action.type === "append-line") {
+      const noteInput = fields.createEl("input", {
+        type: "text",
+        placeholder: "note path (blank = this boundary's hub page)",
+        cls: "sf-rule-input sf-rule-input-wide",
+      });
+      noteInput.value = action.notePath || "";
+      noteInput.onblur = () => {
+        action.notePath = noteInput.value.trim() || undefined;
+        this.saveBoundaryActions(savedPolicy);
+      };
+
+      if (action.type === "set-frontmatter") {
+        const fieldInput = fields.createEl("input", { type: "text", placeholder: "field name", cls: "sf-rule-input" });
+        fieldInput.value = action.field || "";
+        fieldInput.onblur = () => {
+          action.field = fieldInput.value.trim() || undefined;
+          this.saveBoundaryActions(savedPolicy);
+        };
+        fields.createSpan({ text: "=", cls: "sf-rule-operator" });
+        const valueInput = fields.createEl("input", { type: "text", placeholder: "value", cls: "sf-rule-input" });
+        valueInput.value = action.value || "";
+        valueInput.onblur = () => {
+          action.value = valueInput.value;
+          this.saveBoundaryActions(savedPolicy);
+        };
+      } else if (action.type === "append-line") {
+        const lineInput = fields.createEl("input", {
+          type: "text",
+          placeholder: "line to append",
+          cls: "sf-rule-input sf-rule-input-wide",
+        });
+        lineInput.value = action.line || "";
+        lineInput.onblur = () => {
+          action.line = lineInput.value;
+          this.saveBoundaryActions(savedPolicy);
+        };
+      }
+    } else if (action.type === "run-command") {
+      fields.createSpan({ text: action.commandId || "No command chosen", cls: "sf-hub-page-value" });
+      const pickBtn = fields.createEl("button", { text: action.commandId ? "Change" : "Choose command" });
+      pickBtn.onclick = () => {
+        new CommandPickerModal(this.app, (command) => {
+          action.commandId = command.id;
+          this.saveBoundaryActions(savedPolicy);
+        }).open();
+      };
+    } else if (action.type === "show-notice") {
+      const messageInput = fields.createEl("input", {
+        type: "text",
+        placeholder: "notice text",
+        cls: "sf-rule-input sf-rule-input-wide",
+      });
+      messageInput.value = action.message || "";
+      messageInput.onblur = () => {
+        action.message = messageInput.value;
+        this.saveBoundaryActions(savedPolicy);
+      };
+    } else if (action.type === "run-customjs") {
+      const refInput = fields.createEl("input", {
+        type: "text",
+        placeholder: "ClassName.methodName",
+        cls: "sf-rule-input sf-rule-input-wide",
+      });
+      refInput.value = action.customJsRef || "";
+      refInput.onblur = () => {
+        action.customJsRef = refInput.value.trim() || undefined;
+        this.saveBoundaryActions(savedPolicy);
+      };
+    } else if (action.type === "delay") {
+      const delayInput = fields.createEl("input", { type: "number", placeholder: "milliseconds", cls: "sf-rule-input" });
+      delayInput.value = action.delayMs !== undefined ? String(action.delayMs) : "";
+      delayInput.onblur = () => {
+        const num = parseInt(delayInput.value, 10);
+        action.delayMs = isNaN(num) ? undefined : Math.max(0, num);
+        this.saveBoundaryActions(savedPolicy);
+      };
+    }
+  }
+
+  private async saveBoundaryActions(savedPolicy: FolderPolicy) {
+    setPolicy(this.plugin.settings, this.folder, savedPolicy);
+    await this.plugin.saveSettings();
+    this.render();
   }
 
   private markDirty() {

@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS, SmartFoldersSettings, normalizeRuleActions } from "./
 import { normalizeFolderPath } from "./utils/folder-path";
 import { ContextBoundary, getContextBoundaries, resolveContextBoundary } from "./context-boundary";
 import { BoundaryCandidate, BoundaryStack } from "./boundary-state";
+import { runBoundaryActions } from "./boundary-actions";
 import { findSmartFolderRoots, isIgnoredPath } from "./smart-root";
 
 export default class SmartFoldersPlugin extends Plugin {
@@ -113,9 +114,27 @@ export default class SmartFoldersPlugin extends Plugin {
     return this.boundaryStack.getCandidate();
   }
 
-  /** Explicit commit of the current candidate (the future widget's yellow -> green click). */
-  commitBoundaryCandidate(): void {
+  /**
+   * Explicit commit of the current candidate (the future widget's yellow ->
+   * green click). A push only runs the new boundary's onEnter actions; a
+   * replace also runs onExit for everything the commit unwinds, innermost
+   * first - see 08-context-boundary-events.md's Enter/exit hooks section.
+   * Free backward pops (handled in handleDetection, not here) never fire
+   * anything - only an explicit commit does.
+   */
+  async commitBoundaryCandidate(): Promise<void> {
+    const candidate = this.boundaryStack.getCandidate();
+    if (!candidate) return;
+    const outgoing = candidate.kind === "replace" ? [...this.boundaryStack.getStack()].reverse() : [];
+
     this.boundaryStack.commitCandidate();
+
+    for (const boundary of outgoing) {
+      const policy = this.settings.folderPolicies[boundary.folderPath];
+      await runBoundaryActions(this.app, policy?.onExitActions, boundary);
+    }
+    const policy = this.settings.folderPolicies[candidate.boundary.folderPath];
+    await runBoundaryActions(this.app, policy?.onEnterActions, candidate.boundary);
   }
 
   /** Explicit dismissal of the current candidate; the committed stack is untouched. */

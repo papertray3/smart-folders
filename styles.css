@@ -723,6 +723,27 @@ If your plugin does not need CSS, delete this file.
   align-self: flex-start;
 }
 
+.sf-boundary-action-list {
+  margin-bottom: 20px;
+}
+
+.sf-boundary-action-list:last-child {
+  margin-bottom: 0;
+}
+
+.sf-boundary-action-list-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sf-boundary-action-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .sf-context-boundary-name {
   display: flex;
   align-items: center;

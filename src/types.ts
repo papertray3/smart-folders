@@ -66,6 +66,31 @@ export function normalizeRuleActions(rule: SimpleRule): SimpleRule {
   };
 }
 
+// Context boundary On Enter/On Exit hooks - a separate, smaller vocabulary from
+// rule actions (see 00_Admin/08-context-boundary-events.md: rules watch file
+// lifecycle and mutate files, hooks fire on navigation and don't act on any
+// particular file by default).
+export type BoundaryActionType =
+  | "open-note"
+  | "run-command"
+  | "show-notice"
+  | "set-frontmatter"
+  | "append-line"
+  | "run-customjs"
+  | "delay";
+
+export interface BoundaryAction {
+  type: BoundaryActionType;
+  notePath?: string; // open-note/set-frontmatter/append-line target; blank = the firing boundary's hub page
+  commandId?: string; // run-command
+  message?: string; // show-notice
+  field?: string; // set-frontmatter
+  value?: string; // set-frontmatter
+  line?: string; // append-line
+  customJsRef?: string; // run-customjs, "ClassName.methodName"
+  delayMs?: number; // delay
+}
+
 export interface RuleContext {
   file: TFile;
   frontmatter: Record<string, any> | undefined;
@@ -99,7 +124,9 @@ export interface FolderPolicy {
   enabled?: boolean; // per-folder enable/disable
   disabledInheritedRules?: string[]; // rule IDs that are disabled for this folder
   hubPage?: string; // vault path of the note representing this folder on the Hubpage; setting it is what promotes the folder
-  contextBoundary?: boolean; // this folder and descendants form one explicit workspace context; boundaries cannot nest
+  contextBoundary?: boolean; // this folder and descendants form one explicit workspace context; boundaries may nest
+  onEnterActions?: BoundaryAction[]; // run when this boundary is pushed/replaced onto the stack
+  onExitActions?: BoundaryAction[]; // run when this boundary is popped off the stack by a replace commit
 }
 
 export const DEFAULT_SETTINGS: SmartFoldersSettings = {
