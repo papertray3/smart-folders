@@ -1574,7 +1574,11 @@ export class RuleBuilderView extends ItemView {
           this.saveBoundaryActions(savedPolicy);
         };
         fields.createSpan({ text: "=", cls: "sf-rule-operator" });
-        const valueInput = fields.createEl("input", { type: "text", placeholder: "value", cls: "sf-rule-input" });
+        const valueInput = fields.createEl("input", {
+          type: "text",
+          placeholder: "value ({{boundary}}, {{previous}}, {{next}})",
+          cls: "sf-rule-input",
+        });
         valueInput.value = action.value || "";
         valueInput.onblur = () => {
           action.value = valueInput.value;
@@ -1583,7 +1587,7 @@ export class RuleBuilderView extends ItemView {
       } else if (action.type === "append-line") {
         const lineInput = fields.createEl("input", {
           type: "text",
-          placeholder: "line to append",
+          placeholder: "line to append ({{boundary}}, {{previous}}, {{next}})",
           cls: "sf-rule-input sf-rule-input-wide",
         });
         lineInput.value = action.line || "";
@@ -1604,7 +1608,7 @@ export class RuleBuilderView extends ItemView {
     } else if (action.type === "show-notice") {
       const messageInput = fields.createEl("input", {
         type: "text",
-        placeholder: "notice text",
+        placeholder: "notice text ({{boundary}}, {{previous}}, {{next}})",
         cls: "sf-rule-input sf-rule-input-wide",
       });
       messageInput.value = action.message || "";

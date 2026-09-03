@@ -1,7 +1,6 @@
 import { App, Notice, TFile, normalizePath } from "obsidian";
-import { ContextBoundary } from "./context-boundary";
 import { BoundaryAction } from "./types";
-import { parseCustomJsRef, resolveActionNotePath } from "./boundary-action-utils";
+import { BoundaryActionContext, parseCustomJsRef, renderActionTemplate, resolveActionNotePath } from "./boundary-action-utils";
 
 interface AppWithCommands extends App {
   commands?: {
@@ -21,22 +20,23 @@ interface CustomJSWindow extends Window {
 export async function runBoundaryActions(
   app: App,
   actions: BoundaryAction[] | undefined,
-  boundary: ContextBoundary,
+  context: BoundaryActionContext,
 ): Promise<void> {
   if (!actions?.length) return;
   for (const action of actions) {
     try {
-      await runOne(app, action, boundary);
+      await runOne(app, action, context);
     } catch (error) {
-      console.error(`Smart Folders: boundary action "${action.type}" failed for ${boundary.folderPath}`, error);
+      console.error(`Smart Folders: boundary action "${action.type}" failed for ${context.boundary.folderPath}`, error);
     }
   }
 }
 
-async function runOne(app: App, action: BoundaryAction, boundary: ContextBoundary): Promise<void> {
+async function runOne(app: App, action: BoundaryAction, context: BoundaryActionContext): Promise<void> {
+  const boundary = context.boundary;
   switch (action.type) {
     case "open-note": {
-      const file = resolveNoteFile(app, action, boundary);
+      const file = resolveNoteFile(app, action, context);
       if (file) await app.workspace.getLeaf().openFile(file);
       break;
     }
@@ -46,21 +46,23 @@ async function runOne(app: App, action: BoundaryAction, boundary: ContextBoundar
       break;
     }
     case "show-notice": {
-      new Notice(action.message || `Entered ${boundary.folderPath}`);
+      const text = action.message ? renderActionTemplate(action.message, context) : `Entered ${boundary.folderPath}`;
+      new Notice(text);
       break;
     }
     case "set-frontmatter": {
-      const file = resolveNoteFile(app, action, boundary);
+      const file = resolveNoteFile(app, action, context);
       if (file && action.field) {
+        const value = renderActionTemplate(action.value ?? "", context);
         await app.fileManager.processFrontMatter(file, (frontmatter) => {
-          frontmatter[action.field as string] = action.value ?? "";
+          frontmatter[action.field as string] = value;
         });
       }
       break;
     }
     case "append-line": {
-      const file = resolveNoteFile(app, action, boundary);
-      if (file) await app.vault.append(file, `\n${action.line ?? ""}`);
+      const file = resolveNoteFile(app, action, context);
+      if (file) await app.vault.append(file, `\n${renderActionTemplate(action.line ?? "", context)}`);
       break;
     }
     case "run-customjs": {
@@ -81,8 +83,8 @@ async function runOne(app: App, action: BoundaryAction, boundary: ContextBoundar
   }
 }
 
-function resolveNoteFile(app: App, action: BoundaryAction, boundary: ContextBoundary): TFile | undefined {
-  const path = resolveActionNotePath(action, boundary);
+function resolveNoteFile(app: App, action: BoundaryAction, context: BoundaryActionContext): TFile | undefined {
+  const path = resolveActionNotePath(action, context.boundary);
   if (!path) return undefined;
   const file = app.vault.getAbstractFileByPath(normalizePath(path));
   return file instanceof TFile ? file : undefined;

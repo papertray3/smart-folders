@@ -139,20 +139,29 @@ export default class SmartFoldersPlugin extends Plugin {
    * first - see 08-context-boundary-events.md's Enter/exit hooks section.
    * Free backward pops (handled in handleDetection, not here) never fire
    * anything - only an explicit commit does.
+   *
+   * Action text can reference {{boundary}}/{{previous}}/{{next}} (see
+   * renderActionTemplate in boundary-action-utils.ts): onEnter gets
+   * "previous" (whatever was current right before this commit, push or
+   * replace alike - it's just the old stack top either way); onExit gets
+   * "next" (always the incoming boundary, same for every level unwound).
    */
   async commitBoundaryCandidate(): Promise<void> {
     const candidate = this.boundaryStack.getCandidate();
     if (!candidate) return;
-    const outgoing = candidate.kind === "replace" ? [...this.boundaryStack.getStack()].reverse() : [];
+
+    const previousStack = this.boundaryStack.getStack();
+    const previous = previousStack[previousStack.length - 1];
+    const outgoing = candidate.kind === "replace" ? [...previousStack].reverse() : [];
 
     this.boundaryStack.commitCandidate();
 
     for (const boundary of outgoing) {
       const policy = this.settings.folderPolicies[boundary.folderPath];
-      await runBoundaryActions(this.app, policy?.onExitActions, boundary);
+      await runBoundaryActions(this.app, policy?.onExitActions, { boundary, next: candidate.boundary });
     }
     const policy = this.settings.folderPolicies[candidate.boundary.folderPath];
-    await runBoundaryActions(this.app, policy?.onEnterActions, candidate.boundary);
+    await runBoundaryActions(this.app, policy?.onEnterActions, { boundary: candidate.boundary, previous });
   }
 
   /** Explicit dismissal of the current candidate; the committed stack is untouched. */
