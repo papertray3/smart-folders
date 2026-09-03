@@ -2,11 +2,6 @@ import { Menu, TFile, normalizePath } from "obsidian";
 import SmartFoldersPlugin from "../main";
 import { ContextBoundary } from "../context-boundary";
 
-function boundaryLabel(folderPath: string): string {
-  if (folderPath === "/") return "/";
-  return folderPath.split("/").pop() || folderPath;
-}
-
 /**
  * Status-bar widget for the boundary stack (see 00_Admin/08-context-boundary-events.md
  * Widget UX). Collapsed by default - just the current boundary's name with a
@@ -41,7 +36,7 @@ export class BoundaryWidget {
         attr: { "aria-label": "View/manage the active context stack" },
       });
       currentEl.createSpan({ text: "● ", cls: "sf-boundary-widget-dot" });
-      currentEl.createSpan({ text: boundaryLabel(current.folderPath) });
+      currentEl.createSpan({ text: this.plugin.getBoundaryLabel(current.folderPath) });
       currentEl.onclick = (event) => this.openStackMenu(event, stack);
 
       if (candidate) this.el.createSpan({ text: " → ", cls: "sf-boundary-widget-arrow" });
@@ -50,7 +45,7 @@ export class BoundaryWidget {
     if (candidate) {
       const label = `Click to commit to ${candidate.boundary.folderPath}`;
       const candidateEl = this.el.createSpan({
-        text: boundaryLabel(candidate.boundary.folderPath),
+        text: this.plugin.getBoundaryLabel(candidate.boundary.folderPath),
         cls: "sf-boundary-widget-candidate",
         attr: { "aria-label": label, title: label },
       });
@@ -67,7 +62,7 @@ export class BoundaryWidget {
     stack.forEach((boundary, index) => {
       const isCurrent = index === stack.length - 1;
       menu.addItem((item) => {
-        item.setTitle(boundaryLabel(boundary.folderPath)).setChecked(isCurrent);
+        item.setTitle(this.plugin.getBoundaryLabel(boundary.folderPath)).setChecked(isCurrent);
         item.onClick(async () => {
           if (isCurrent) {
             if (!boundary.hubPage) return;
@@ -85,7 +80,7 @@ export class BoundaryWidget {
     if (candidate) {
       menu.addSeparator();
       menu.addItem((item) => {
-        item.setTitle(`Dismiss ${boundaryLabel(candidate.boundary.folderPath)}`).setIcon("x");
+        item.setTitle(`Dismiss ${this.plugin.getBoundaryLabel(candidate.boundary.folderPath)}`).setIcon("x");
         item.onClick(() => {
           this.plugin.dismissBoundaryCandidate();
           this.render();

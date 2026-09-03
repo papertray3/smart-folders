@@ -4,6 +4,7 @@ import { RuleBuilderView, VIEW_TYPE_RULE_BUILDER } from "./ui/rule-builder-view"
 import { DEFAULT_SETTINGS, SmartFoldersSettings, normalizeRuleActions } from "./types";
 import { normalizeFolderPath } from "./utils/folder-path";
 import { ContextBoundary, getContextBoundaries, resolveContextBoundary } from "./context-boundary";
+import { getBoundaryLabel } from "./boundary-labels";
 import { BoundaryCandidate, BoundaryStack } from "./boundary-state";
 import { runBoundaryActions } from "./boundary-actions";
 import { BoundaryWidget } from "./ui/boundary-widget";
@@ -122,6 +123,16 @@ export default class SmartFoldersPlugin extends Plugin {
     return resolveContextBoundary(path, this.settings.folderPolicies);
   }
 
+  /**
+   * Human-readable label for a boundary, unique among all configured
+   * boundaries - not just its last path segment, since two boundaries can
+   * share a leaf folder name (see boundary-labels.ts). Falls back to the raw
+   * folderPath if it isn't a currently-configured boundary.
+   */
+  getBoundaryLabel(folderPath: string): string {
+    return getBoundaryLabel(folderPath, this.getContextBoundaries());
+  }
+
   /** Committed boundary stack, innermost last. In-memory only - resets on reload. */
   getBoundaryStack(): readonly ContextBoundary[] {
     return this.boundaryStack.getStack();
@@ -156,15 +167,16 @@ export default class SmartFoldersPlugin extends Plugin {
     const previous = previousStack[previousStack.length - 1];
     const next = candidate.boundary;
     const outgoing = candidate.kind === "replace" ? [...previousStack].reverse() : [];
+    const allBoundaries = this.getContextBoundaries();
 
     this.boundaryStack.commitCandidate();
 
     for (const boundary of outgoing) {
       const policy = this.settings.folderPolicies[boundary.folderPath];
-      await runBoundaryActions(this.app, policy?.onExitActions, { boundary, previous, next });
+      await runBoundaryActions(this.app, policy?.onExitActions, { boundary, previous, next }, allBoundaries);
     }
     const policy = this.settings.folderPolicies[candidate.boundary.folderPath];
-    await runBoundaryActions(this.app, policy?.onEnterActions, { boundary: next, previous, next });
+    await runBoundaryActions(this.app, policy?.onEnterActions, { boundary: next, previous, next }, allBoundaries);
   }
 
   /** Explicit dismissal of the current candidate; the committed stack is untouched. */

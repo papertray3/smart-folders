@@ -1,5 +1,6 @@
 import { ContextBoundary } from "./context-boundary";
 import { BoundaryAction } from "./types";
+import { disambiguateBoundaryLabels } from "./boundary-labels";
 
 /** Target note for an action that references one, falling back to the firing boundary's hub page when unset. */
 export function resolveActionNotePath(action: BoundaryAction, boundary: ContextBoundary): string | undefined {
@@ -14,23 +15,24 @@ export function parseCustomJsRef(ref: string): { className: string; methodName: 
 }
 
 export interface BoundaryActionContext {
-  /** The boundary this action list is firing for (onEnter's new boundary, or onExit's exiting one). */
+  /** The specific boundary this action list belongs to (the new one for onEnter, the exiting one for each onExit). */
   boundary: ContextBoundary;
-  /** onEnter only: whatever was current immediately before this commit, if anything. */
+  /** Whatever was current immediately before this commit, if anything. Same value for every action fired by one commit, enter or exit alike. */
   previous?: ContextBoundary;
-  /** onExit only: the boundary this transition is heading to. */
+  /** The boundary this transition is heading to. Same value for every action fired by one commit, enter or exit alike. */
   next?: ContextBoundary;
 }
 
-function shortName(folderPath: string): string {
-  if (folderPath === "/") return "/";
-  return folderPath.split("/").pop() || folderPath;
-}
-
-/** Replaces {{boundary}}, {{previous}}, {{next}} with the relevant boundary's folder name. Unknown/unavailable tokens are left as-is. */
-export function renderActionTemplate(text: string, context: BoundaryActionContext): string {
+/**
+ * Replaces {{boundary}}, {{previous}}, {{next}} with each boundary's
+ * disambiguated label (see boundary-labels.ts - not just the last path
+ * segment, since two boundaries can share a leaf folder name). Unknown or
+ * currently-unavailable tokens are left as literal text rather than erroring.
+ */
+export function renderActionTemplate(text: string, context: BoundaryActionContext, allBoundaries: readonly ContextBoundary[]): string {
+  const labels = disambiguateBoundaryLabels(allBoundaries);
   return text.replace(/\{\{(boundary|previous|next)\}\}/g, (match, token: "boundary" | "previous" | "next") => {
     const boundary = token === "boundary" ? context.boundary : context[token];
-    return boundary ? shortName(boundary.folderPath) : match;
+    return boundary ? labels.get(boundary.folderPath) ?? boundary.folderPath : match;
   });
 }

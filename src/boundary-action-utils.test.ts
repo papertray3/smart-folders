@@ -41,25 +41,33 @@ describe("renderActionTemplate", () => {
   const boundary = { folderPath: "Notes/Projects/smart-folders" };
   const previous = { folderPath: "Notes/Projects/agent-client" };
   const next = { folderPath: "Notes/Projects/LLM-Guide" };
+  const allBoundaries = [boundary, previous, next];
 
   it("substitutes {{boundary}} with the firing boundary's folder name", () => {
-    expect(renderActionTemplate("Entered {{boundary}}", { boundary })).toBe("Entered smart-folders");
+    expect(renderActionTemplate("Entered {{boundary}}", { boundary }, allBoundaries)).toBe("Entered smart-folders");
   });
 
   it("substitutes {{previous}} and {{next}} when present", () => {
-    expect(renderActionTemplate("{{previous}} -> {{boundary}}", { boundary, previous })).toBe("agent-client -> smart-folders");
-    expect(renderActionTemplate("{{boundary}} -> {{next}}", { boundary, next })).toBe("smart-folders -> LLM-Guide");
+    expect(renderActionTemplate("{{previous}} -> {{boundary}}", { boundary, previous }, allBoundaries)).toBe("agent-client -> smart-folders");
+    expect(renderActionTemplate("{{boundary}} -> {{next}}", { boundary, next }, allBoundaries)).toBe("smart-folders -> LLM-Guide");
   });
 
   it("leaves a token as literal text when its boundary isn't available", () => {
-    expect(renderActionTemplate("from {{previous}}", { boundary })).toBe("from {{previous}}");
+    expect(renderActionTemplate("from {{previous}}", { boundary }, allBoundaries)).toBe("from {{previous}}");
   });
 
   it("leaves unknown tokens untouched", () => {
-    expect(renderActionTemplate("{{nonsense}}", { boundary })).toBe("{{nonsense}}");
+    expect(renderActionTemplate("{{nonsense}}", { boundary }, allBoundaries)).toBe("{{nonsense}}");
   });
 
   it("uses the root label for the root boundary", () => {
-    expect(renderActionTemplate("{{boundary}}", { boundary: { folderPath: "/" } })).toBe("/");
+    expect(renderActionTemplate("{{boundary}}", { boundary: { folderPath: "/" } }, [{ folderPath: "/" }])).toBe("/");
+  });
+
+  it("disambiguates two boundaries that share a leaf folder name", () => {
+    const a = { folderPath: "Notes/ProjectA/Drafts" };
+    const b = { folderPath: "Notes/ProjectB/Drafts" };
+    expect(renderActionTemplate("Entered {{boundary}}, leaving {{previous}}", { boundary: b, previous: a }, [a, b]))
+      .toBe("Entered ProjectB/Drafts, leaving ProjectA/Drafts");
   });
 });
