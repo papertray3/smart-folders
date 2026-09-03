@@ -141,10 +141,12 @@ export default class SmartFoldersPlugin extends Plugin {
    * anything - only an explicit commit does.
    *
    * Action text can reference {{boundary}}/{{previous}}/{{next}} (see
-   * renderActionTemplate in boundary-action-utils.ts): onEnter gets
-   * "previous" (whatever was current right before this commit, push or
-   * replace alike - it's just the old stack top either way); onExit gets
-   * "next" (always the incoming boundary, same for every level unwound).
+   * renderActionTemplate in boundary-action-utils.ts) - "boundary" is
+   * whichever specific boundary this action list belongs to (the new one
+   * for onEnter, the exiting one for each onExit), while "previous" and
+   * "next" describe the transition as a whole (old stack top -> incoming
+   * candidate) and are the same values for every action fired by this one
+   * commit, enter or exit alike.
    */
   async commitBoundaryCandidate(): Promise<void> {
     const candidate = this.boundaryStack.getCandidate();
@@ -152,16 +154,17 @@ export default class SmartFoldersPlugin extends Plugin {
 
     const previousStack = this.boundaryStack.getStack();
     const previous = previousStack[previousStack.length - 1];
+    const next = candidate.boundary;
     const outgoing = candidate.kind === "replace" ? [...previousStack].reverse() : [];
 
     this.boundaryStack.commitCandidate();
 
     for (const boundary of outgoing) {
       const policy = this.settings.folderPolicies[boundary.folderPath];
-      await runBoundaryActions(this.app, policy?.onExitActions, { boundary, next: candidate.boundary });
+      await runBoundaryActions(this.app, policy?.onExitActions, { boundary, previous, next });
     }
     const policy = this.settings.folderPolicies[candidate.boundary.folderPath];
-    await runBoundaryActions(this.app, policy?.onEnterActions, { boundary: candidate.boundary, previous });
+    await runBoundaryActions(this.app, policy?.onEnterActions, { boundary: next, previous, next });
   }
 
   /** Explicit dismissal of the current candidate; the committed stack is untouched. */
